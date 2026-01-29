@@ -51,7 +51,7 @@ export interface Zone {
   attentionTime: number // Time accumulator for attention pulse
   particles: THREE.Points
   particleVelocities: Float32Array
-  status: 'idle' | 'working' | 'waiting' | 'attention' | 'offline'
+  status: 'idle' | 'working' | 'waiting' | 'attention' | 'offline' | 'dismissed'
   // Animation state for enter/exit transitions
   animationState?: 'entering' | 'exiting'
   animationProgress?: number // 0 to 1
@@ -1896,6 +1896,7 @@ export class WorkshopScene {
       waiting: { emissive: 0xfbbf24, intensity: 0.06, ring: 0xfbbf24, ringOpacity: 0.6 },
       attention: { emissive: 0xf87171, intensity: 0.10, ring: 0xf87171, ringOpacity: 0.7 },
       offline: { emissive: 0x404050, intensity: 0.01, ring: 0x404050, ringOpacity: 0.2 },
+      dismissed: { emissive: 0x303040, intensity: 0.005, ring: 0x505060, ringOpacity: 0.15 },
     }
 
     const colors = statusColors[status]

@@ -127,6 +127,12 @@
   box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
 }
 
+.session-item .session-status.dismissed {
+  background: #6b7280;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
 /* Offline session styling */
 .session-item:has(.session-status.offline) {
   background: rgba(239, 68, 68, 0.08);
@@ -135,6 +141,22 @@
 
 .session-item:has(.session-status.offline):hover {
   background: rgba(239, 68, 68, 0.15);
+}
+
+/* Dismissed session styling - greyed out */
+.session-item:has(.session-status.dismissed) {
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  opacity: 0.7;
+}
+
+.session-item:has(.session-status.dismissed):hover {
+  background: rgba(107, 114, 128, 0.15);
+  opacity: 0.85;
+}
+
+.session-item:has(.session-status.dismissed) .session-name {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .session-item .session-info {
@@ -239,6 +261,11 @@
 
 .session-item .session-detail.attention {
   color: #fbbf24;
+}
+
+.session-item .session-detail.dismissed {
+  color: #6b7280;
+  font-style: italic;
 }
 
 @keyframes attention-pulse {

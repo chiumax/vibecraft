@@ -240,12 +240,15 @@ function renderManagedSessions(): void {
       detail = `Using ${session.currentTool}`
     } else if (session.status === 'offline') {
       detail = lastActive ? `Offline · was ${lastActive}` : 'Offline - click 🔄 to restart'
+    } else if (session.status === 'dismissed') {
+      detail = '💤 Dismissed - click ▶️ to reactivate'
     } else {
       detail = projectName ? `📁 ${projectName}` : 'Ready'
     }
     const detailClass = session.status === 'working' ? 'session-detail working'
       : session.status === 'waiting' ? 'session-detail attention'
       : needsAttention ? 'session-detail attention'
+      : session.status === 'dismissed' ? 'session-detail dismissed'
       : 'session-detail'
 
     // Get last prompt for this session (via claudeSessionId)
@@ -271,11 +274,13 @@ function renderManagedSessions(): void {
       <div class="session-status ${statusClass}"></div>
       <div class="session-info">
         <div class="session-name">${escapeHtml(session.name)}</div>
-        <div class="${detailClass}">${detail}${!needsAttention && session.status !== 'offline' && lastActive ? ` · ${lastActive}` : ''}</div>
+        <div class="${detailClass}">${detail}${!needsAttention && session.status !== 'offline' && session.status !== 'dismissed' && lastActive ? ` · ${lastActive}` : ''}</div>
         ${truncatedPrompt ? `<div class="session-prompt">💬 ${escapeHtml(truncatedPrompt)}</div>` : ''}
       </div>
       <div class="session-actions">
         ${session.status === 'offline' ? `<button class="restart-btn" title="Restart session">🔄</button>` : ''}
+        ${session.status === 'dismissed' ? `<button class="reactivate-btn" title="Reactivate session">▶️</button>` : ''}
+        ${session.status !== 'offline' && session.status !== 'dismissed' ? `<button class="dismiss-btn" title="Dismiss (keep context)">💤</button>` : ''}
         <button class="rename-btn" title="Rename">✏️</button>
         <button class="delete-btn" title="Delete">🗑️</button>
       </div>
@@ -309,6 +314,18 @@ function renderManagedSessions(): void {
     el.querySelector('.restart-btn')?.addEventListener('click', (e) => {
       e.stopPropagation()
       restartManagedSession(session.id, session.name)
+    })
+
+    // Dismiss button (grey out but keep tmux alive)
+    el.querySelector('.dismiss-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      dismissManagedSession(session.id)
+    })
+
+    // Reactivate button (for dismissed sessions)
+    el.querySelector('.reactivate-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      reactivateManagedSession(session.id)
     })
 
     container.appendChild(el)
@@ -499,6 +516,28 @@ async function restartManagedSession(sessionId: string, sessionName: string): Pr
         statusEl.textContent = originalText || 'Connected'
       }, 2000)
     }
+  }
+  // Update will be broadcast via WebSocket
+}
+
+/**
+ * Dismiss a managed session (grey out but keep tmux alive)
+ */
+async function dismissManagedSession(sessionId: string): Promise<void> {
+  const data = await sessionAPI.dismissSession(sessionId)
+  if (!data.ok) {
+    console.error('Failed to dismiss session:', data.error)
+  }
+  // Update will be broadcast via WebSocket
+}
+
+/**
+ * Reactivate a dismissed session
+ */
+async function reactivateManagedSession(sessionId: string): Promise<void> {
+  const data = await sessionAPI.reactivateSession(sessionId)
+  if (!data.ok) {
+    console.error('Failed to reactivate session:', data.error)
   }
   // Update will be broadcast via WebSocket
 }
@@ -1635,9 +1674,58 @@ function updatePromptTarget(sessionId: string, color: number): void {
     const index = state.managedSessions.indexOf(managed) + 1
     targetEl.innerHTML = `
       <span class="target-badge" style="background: ${colorHex}">${index}</span>
-      <span style="color: ${colorHex}">${escapeHtml(managed.name)}</span>
+      <span class="target-name" style="color: ${colorHex}" data-tmux="${escapeHtml(managed.tmuxSession)}" data-session-id="${escapeHtml(managed.id)}">${escapeHtml(managed.name)}</span>
+      <button class="target-terminal-btn" title="Open in iTerm2">⌨️</button>
     `
-    targetEl.title = `Prompts will be sent to ${managed.name}`
+    targetEl.title = `Click name to copy tmux session: ${managed.tmuxSession}`
+
+    // Add click handler to copy tmux session name
+    const nameEl = targetEl.querySelector('.target-name') as HTMLElement
+    if (nameEl) {
+      nameEl.style.cursor = 'pointer'
+      nameEl.onclick = async (e) => {
+        e.stopPropagation()
+        const tmuxName = nameEl.dataset.tmux
+        if (!tmuxName) return
+
+        try {
+          await navigator.clipboard.writeText(tmuxName)
+          // Show brief feedback
+          const originalText = nameEl.textContent
+          nameEl.textContent = 'Copied!'
+          setTimeout(() => {
+            nameEl.textContent = originalText
+          }, 1500)
+        } catch (err) {
+          console.error('Failed to copy tmux session:', err)
+        }
+      }
+    }
+
+    // Add click handler for terminal button
+    const terminalBtn = targetEl.querySelector('.target-terminal-btn') as HTMLButtonElement
+    if (terminalBtn) {
+      terminalBtn.onclick = async (e) => {
+        e.stopPropagation()
+        const sessionId = nameEl?.dataset.sessionId
+        if (!sessionId) return
+
+        terminalBtn.textContent = '...'
+        const result = await sessionAPI.openTerminal(sessionId)
+        if (result.ok) {
+          terminalBtn.textContent = '✓'
+          setTimeout(() => {
+            terminalBtn.textContent = '⌨️'
+          }, 1500)
+        } else {
+          terminalBtn.textContent = '✗'
+          console.error('Failed to open terminal:', result.error)
+          setTimeout(() => {
+            terminalBtn.textContent = '⌨️'
+          }, 2000)
+        }
+      }
+    }
   } else {
     targetEl.innerHTML = `
       <span class="target-dot" style="background: ${colorHex}"></span>
@@ -2645,6 +2733,18 @@ function init() {
     }
   })
 
+  // Click on status dot to force reconnect
+  const statusDot = document.getElementById('status-dot')
+  if (statusDot) {
+    statusDot.style.cursor = 'pointer'
+    statusDot.title = 'Click to reconnect'
+    statusDot.addEventListener('click', () => {
+      console.log('Manual reconnect triggered')
+      updateStatus(false, 'Reconnecting...')
+      state.client?.forceReconnect()
+    })
+  }
+
   // Show not-connected overlay after timeout if never connected (production only)
   if (!import.meta.env.DEV) {
     setTimeout(() => {
@@ -2752,6 +2852,7 @@ function init() {
           const zoneStatus = session.status === 'working' ? 'working'
             : session.status === 'waiting' ? 'waiting'
             : session.status === 'offline' ? 'offline'
+            : session.status === 'dismissed' ? 'dismissed'
             : 'idle'
           state.scene.setZoneStatus(session.claudeSessionId, zoneStatus)
         }

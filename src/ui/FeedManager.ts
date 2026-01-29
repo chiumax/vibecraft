@@ -415,6 +415,8 @@ export class FeedManager {
                 const textEl = item.querySelector('.assistant-text')
                 if (textEl) {
                   textEl.innerHTML = renderMarkdown(response)
+                  // Set up copy buttons for newly rendered code blocks
+                  setupCodeCopyButtons(textEl as HTMLElement)
                 }
               })
             }
@@ -469,6 +471,9 @@ export class FeedManager {
         }
       })
     })
+
+    // Set up code copy buttons
+    setupCodeCopyButtons(item)
   }
 
   /**
@@ -539,8 +544,12 @@ export function escapeHtml(text: string): string {
 export function renderMarkdown(text: string): string {
   let html = escapeHtml(text)
 
-  // Code blocks (```...```)
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+  // Code blocks (```...```) - wrap in container with copy button
+  let codeBlockId = 0
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, _lang, code) => {
+    const id = `code-block-${Date.now()}-${codeBlockId++}`
+    return `<div class="code-block-wrapper"><button class="code-copy-btn" data-code-id="${id}" title="Copy to clipboard">📋</button><pre><code id="${id}">${code}</code></pre></div>`
+  })
 
   // Inline code (`...`)
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -565,9 +574,46 @@ export function renderMarkdown(text: string): string {
   html = html.replace(/\n/g, '<br>')
 
   // Clean up extra breaks in code blocks
-  html = html.replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, (match, code) => {
-    return '<pre><code>' + code.replace(/<br>/g, '\n') + '</code></pre>'
+  html = html.replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g, (match, code) => {
+    // Preserve the id attribute from the original match
+    const idMatch = match.match(/id="([^"]+)"/)
+    const id = idMatch ? ` id="${idMatch[1]}"` : ''
+    return `<pre><code${id}>` + code.replace(/<br>/g, '\n') + '</code></pre>'
   })
 
   return html
+}
+
+/**
+ * Set up copy button click handlers for code blocks
+ * Call this after inserting rendered markdown into the DOM
+ */
+export function setupCodeCopyButtons(container: HTMLElement): void {
+  container.querySelectorAll('.code-copy-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      const button = e.currentTarget as HTMLButtonElement
+      const codeId = button.dataset.codeId
+      if (!codeId) return
+
+      const codeEl = document.getElementById(codeId)
+      if (!codeEl) return
+
+      const code = codeEl.textContent || ''
+      try {
+        await navigator.clipboard.writeText(code)
+        button.textContent = '✅'
+        button.title = 'Copied!'
+        setTimeout(() => {
+          button.textContent = '📋'
+          button.title = 'Copy to clipboard'
+        }, 2000)
+      } catch (err) {
+        button.textContent = '❌'
+        setTimeout(() => {
+          button.textContent = '📋'
+        }, 2000)
+      }
+    })
+  })
 }

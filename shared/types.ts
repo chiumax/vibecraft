@@ -166,6 +166,7 @@ export type ServerMessage =
   | { type: 'permission_prompt'; payload: { sessionId: string; tool: string; context: string; options: PermissionOption[] } }
   | { type: 'permission_resolved'; payload: { sessionId: string } }
   | { type: 'text_tiles'; payload: TextTile[] }
+  | { type: 'pong'; payload: { timestamp: number } }
 
 /** Client -> Server messages */
 export type ClientMessage =
@@ -261,7 +262,7 @@ export interface TaskToolInput {
 // ============================================================================
 
 /** Status of a managed Claude session */
-export type SessionStatus = 'idle' | 'working' | 'waiting' | 'offline'
+export type SessionStatus = 'idle' | 'working' | 'waiting' | 'offline' | 'dismissed'
 
 /** A managed Claude session */
 export interface ManagedSession {

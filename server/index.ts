@@ -759,6 +759,19 @@ function shortId(): string {
 }
 
 /**
+ * Sanitize a name for use as a tmux session name
+ * tmux allows alphanumeric, underscore, hyphen
+ */
+function sanitizeTmuxName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')  // Replace invalid chars with hyphen
+    .replace(/-+/g, '-')           // Collapse multiple hyphens
+    .replace(/^-|-$/g, '')         // Trim leading/trailing hyphens
+    .slice(0, 32)                  // Limit length
+}
+
+/**
  * Create a new managed session
  */
 function createSession(options: CreateSessionRequest = {}): Promise<ManagedSession> {
@@ -766,7 +779,11 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
     const id = randomUUID()
     sessionCounter++
     const name = options.name || `Claude ${sessionCounter}`
-    const tmuxSession = `vibecraft-${shortId()}`
+
+    // Use sanitized name for tmux session, with fallback to random ID
+    const baseTmuxName = options.name ? sanitizeTmuxName(options.name) : `claude-${sessionCounter}`
+    // Add short suffix to ensure uniqueness
+    const tmuxSession = `${baseTmuxName}-${shortId().slice(0, 4)}`
 
     // Validate cwd to prevent command injection
     let cwd: string
@@ -949,7 +966,8 @@ function checkSessionHealth(): void {
     if (error) {
       // tmux might not be running
       for (const session of managedSessions.values()) {
-        if (session.status !== 'offline') {
+        // Don't change dismissed sessions
+        if (session.status !== 'offline' && session.status !== 'dismissed') {
           session.status = 'offline'
         }
       }
@@ -960,6 +978,11 @@ function checkSessionHealth(): void {
     let changed = false
 
     for (const session of managedSessions.values()) {
+      // Skip dismissed sessions - they stay dismissed until manually reactivated
+      if (session.status === 'dismissed') {
+        continue
+      }
+
       const isAlive = activeSessions.has(session.tmuxSession)
       const newStatus = isAlive ? (session.status === 'offline' ? 'idle' : session.status) : 'offline'
 
@@ -1446,7 +1469,8 @@ function handleClientMessage(ws: WebSocket, message: ClientMessage) {
     }
 
     case 'ping':
-      // Just acknowledge, no response needed
+      // Respond with pong so client knows connection is alive
+      ws.send(JSON.stringify({ type: 'pong', payload: { timestamp: Date.now() } }))
       break
 
     case 'voice_start':
@@ -1887,6 +1911,103 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
           log(`Sent Ctrl+C to ${session.name}`)
           res.end(JSON.stringify({ ok: true }))
         }
+      })
+      return
+    }
+
+    // POST /sessions/:id/dismiss - Dismiss session (keep tmux alive but grey out)
+    if (req.method === 'POST' && action === 'dismiss') {
+      const session = getSession(sessionId)
+      if (!session) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Session not found' }))
+        return
+      }
+
+      session.status = 'dismissed'
+      log(`Dismissed session: ${session.name}`)
+      broadcastSessions()
+      saveSessions()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, session }))
+      return
+    }
+
+    // POST /sessions/:id/terminal - Open iTerm2 and attach to tmux session
+    if (req.method === 'POST' && action === 'terminal') {
+      const session = getSession(sessionId)
+      if (!session) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Session not found' }))
+        return
+      }
+
+      try {
+        validateTmuxSession(session.tmuxSession)
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid tmux session name' }))
+        return
+      }
+
+      // AppleScript to open iTerm2 and attach to tmux session
+      const script = `
+        tell application "iTerm2"
+          activate
+          create window with default profile
+          tell current session of current window
+            write text "tmux attach -t ${session.tmuxSession}"
+          end tell
+        end tell
+      `
+
+      exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, EXEC_OPTIONS, (error) => {
+        if (error) {
+          log(`Failed to open terminal: ${error.message}`)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: error.message }))
+        } else {
+          log(`Opened iTerm2 for session: ${session.name}`)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
+        }
+      })
+      return
+    }
+
+    // POST /sessions/:id/reactivate - Reactivate a dismissed session
+    if (req.method === 'POST' && action === 'reactivate') {
+      const session = getSession(sessionId)
+      if (!session) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Session not found' }))
+        return
+      }
+
+      // Check if tmux session still exists
+      try {
+        validateTmuxSession(session.tmuxSession)
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid tmux session name' }))
+        return
+      }
+
+      execFile('tmux', ['has-session', '-t', session.tmuxSession], EXEC_OPTIONS, (error) => {
+        if (error) {
+          // tmux session is gone, mark as offline
+          session.status = 'offline'
+          log(`Reactivate failed - tmux session gone: ${session.name}`)
+        } else {
+          // tmux session exists, mark as idle
+          session.status = 'idle'
+          session.lastActivity = Date.now()
+          log(`Reactivated session: ${session.name}`)
+        }
+        broadcastSessions()
+        saveSessions()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, session }))
       })
       return
     }

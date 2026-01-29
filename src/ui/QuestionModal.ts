@@ -37,6 +37,7 @@ export interface QuestionModalContext {
 // ============================================================================
 
 let currentQuestion: QuestionData | null = null
+let questionQueue: QuestionData[] = []
 let context: QuestionModalContext | null = null
 
 // ============================================================================
@@ -95,8 +96,31 @@ export function setupQuestionModal(ctx: QuestionModalContext): void {
 
 /**
  * Show the question modal with data from AskUserQuestion
+ * If modal is already showing, queues the question for later
  */
 export function showQuestionModal(data: QuestionData): void {
+  // If modal is already showing a question, queue this one
+  if (currentQuestion !== null) {
+    console.log(`Question queued (${questionQueue.length + 1} in queue)`)
+    questionQueue.push(data)
+    // Still set zone attention for queued questions
+    if (context?.scene) {
+      context.scene.setZoneAttention(data.sessionId, 'question')
+      context.scene.setZoneStatus(data.sessionId, 'attention')
+    }
+    if (data.managedSessionId) {
+      context?.attentionSystem?.add(data.managedSessionId)
+    }
+    return
+  }
+
+  displayQuestion(data)
+}
+
+/**
+ * Display a question in the modal (internal helper)
+ */
+function displayQuestion(data: QuestionData): void {
   const modal = document.getElementById('question-modal')
   const badge = document.getElementById('question-badge')
   const header = document.getElementById('question-header')
@@ -112,7 +136,11 @@ export function showQuestionModal(data: QuestionData): void {
   const q = data.questions[0]
   if (!q) return
 
-  if (badge) badge.textContent = q.header || 'Question'
+  // Show queue count if there are more questions
+  const queueCount = questionQueue.length
+  const queueIndicator = queueCount > 0 ? ` (+${queueCount} more)` : ''
+
+  if (badge) badge.textContent = (q.header || 'Question') + queueIndicator
   if (header) header.textContent = 'Claude needs input'
   if (text) text.textContent = q.question
 
@@ -157,13 +185,12 @@ export function showQuestionModal(data: QuestionData): void {
 }
 
 /**
- * Hide the question modal
+ * Hide the question modal (or show next queued question)
  */
 export function hideQuestionModal(): void {
   const modal = document.getElementById('question-modal')
-  modal?.classList.remove('visible')
 
-  // Reset zone status and clear attention when question is answered
+  // Reset zone status and clear attention for current question
   if (currentQuestion && context) {
     if (context.scene) {
       context.scene.setZoneStatus(currentQuestion.sessionId, 'working')
@@ -177,6 +204,19 @@ export function hideQuestionModal(): void {
   }
 
   currentQuestion = null
+
+  // Check if there are queued questions
+  if (questionQueue.length > 0) {
+    const nextQuestion = questionQueue.shift()!
+    console.log(`Showing next queued question (${questionQueue.length} remaining)`)
+    // Small delay so user sees the transition
+    setTimeout(() => {
+      displayQuestion(nextQuestion)
+    }, 150)
+  } else {
+    // No more questions, hide modal
+    modal?.classList.remove('visible')
+  }
 }
 
 /**
@@ -184,6 +224,13 @@ export function hideQuestionModal(): void {
  */
 export function isQuestionModalVisible(): boolean {
   return currentQuestion !== null
+}
+
+/**
+ * Get number of questions in queue (for debugging/display)
+ */
+export function getQuestionQueueLength(): number {
+  return questionQueue.length
 }
 
 // ============================================================================

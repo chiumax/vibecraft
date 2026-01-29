@@ -148,6 +148,31 @@
   color: #000;
 }
 
+#prompt-target .target-name {
+  transition: color 0.15s;
+}
+
+#prompt-target .target-name:hover {
+  text-decoration: underline;
+}
+
+#prompt-target .target-terminal-btn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  margin-left: 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: all 0.15s;
+}
+
+#prompt-target .target-terminal-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 #prompt-status {
   color: rgba(255, 255, 255, 0.5);
 }

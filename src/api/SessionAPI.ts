@@ -184,6 +184,51 @@ export function createSessionAPI(apiUrl: string) {
         console.error('Error refreshing sessions:', e)
       }
     },
+
+    /**
+     * Dismiss a session (grey out but keep tmux alive)
+     */
+    async dismissSession(sessionId: string): Promise<SimpleResponse> {
+      try {
+        const response = await fetch(`${apiUrl}/sessions/${sessionId}/dismiss`, {
+          method: 'POST',
+        })
+        return await response.json()
+      } catch (e) {
+        console.error('Error dismissing session:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
+
+    /**
+     * Reactivate a dismissed session
+     */
+    async reactivateSession(sessionId: string): Promise<SimpleResponse> {
+      try {
+        const response = await fetch(`${apiUrl}/sessions/${sessionId}/reactivate`, {
+          method: 'POST',
+        })
+        return await response.json()
+      } catch (e) {
+        console.error('Error reactivating session:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
+
+    /**
+     * Open iTerm2 and attach to the session's tmux
+     */
+    async openTerminal(sessionId: string): Promise<SimpleResponse> {
+      try {
+        const response = await fetch(`${apiUrl}/sessions/${sessionId}/terminal`, {
+          method: 'POST',
+        })
+        return await response.json()
+      } catch (e) {
+        console.error('Error opening terminal:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
   }
 }
 

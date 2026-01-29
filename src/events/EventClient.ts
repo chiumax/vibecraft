@@ -33,6 +33,13 @@ export class EventClient {
   private reconnectTimeout: number | null = null
   private _isConnected = false
 
+  // Heartbeat to detect stale connections
+  private heartbeatInterval: number | null = null
+  private lastPongTime = 0
+  private missedPongs = 0
+  private readonly HEARTBEAT_INTERVAL = 10000 // 10 seconds
+  private readonly MAX_MISSED_PONGS = 2
+
   constructor(options: EventClientOptions) {
     this.options = {
       reconnectInterval: 2000,
@@ -72,15 +79,21 @@ export class EventClient {
         this.log('Connected')
         this._isConnected = true
         this.reconnectAttempts = 0
+        this.lastPongTime = Date.now()
+        this.missedPongs = 0
         this.notifyConnectionHandlers(true)
 
         // Subscribe to events
         this.send({ type: 'subscribe' })
+
+        // Start heartbeat
+        this.startHeartbeat()
       }
 
       this.ws.onclose = () => {
         this.log('Disconnected')
         this._isConnected = false
+        this.stopHeartbeat()
         this.notifyConnectionHandlers(false)
         this.scheduleReconnect()
       }
@@ -178,6 +191,12 @@ export class EventClient {
       case 'session_update':
         this.log('Session update:', message.payload.name)
         this.notifySessionUpdateHandlers(message.payload)
+        break
+
+      case 'pong':
+        this.lastPongTime = Date.now()
+        this.missedPongs = 0
+        this.log('Pong received')
         break
 
       default:
@@ -295,5 +314,48 @@ export class EventClient {
 
   requestHistory(limit = 100): void {
     this.send({ type: 'get_history', payload: { limit } })
+  }
+
+  /** Force reconnect (useful when connection seems stale) */
+  forceReconnect(): void {
+    this.log('Force reconnecting...')
+    this.stopHeartbeat()
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+    this._isConnected = false
+    this.reconnectAttempts = 0
+    this.connect()
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat()
+    this.heartbeatInterval = window.setInterval(() => {
+      if (!this._isConnected || !this.ws) return
+
+      // Check if we missed too many pongs
+      const timeSinceLastPong = Date.now() - this.lastPongTime
+      if (timeSinceLastPong > this.HEARTBEAT_INTERVAL * 1.5) {
+        this.missedPongs++
+        this.log(`Missed pong (${this.missedPongs}/${this.MAX_MISSED_PONGS})`)
+
+        if (this.missedPongs >= this.MAX_MISSED_PONGS) {
+          this.log('Connection appears stale, forcing reconnect')
+          this.forceReconnect()
+          return
+        }
+      }
+
+      // Send ping
+      this.send({ type: 'ping' })
+    }, this.HEARTBEAT_INTERVAL)
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval)
+      this.heartbeatInterval = null
+    }
   }
 }

@@ -938,9 +938,72 @@ function deleteSession(id: string): Promise<boolean> {
 }
 
 /**
- * Send a prompt to a specific session
+ * Check if an error indicates tmux session is dead/unavailable
  */
-async function sendPromptToSession(id: string, prompt: string): Promise<{ ok: boolean; error?: string }> {
+function isTmuxSessionDead(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error)
+  return msg.includes('no server running')
+    || msg.includes('no current client')
+    || msg.includes("can't find pane")
+    || msg.includes("can't find session")
+    || msg.includes("session not found")
+}
+
+/**
+ * Restart a managed session's tmux process
+ */
+function restartManagedSession(session: ManagedSession): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let cwd: string
+    try {
+      cwd = validateDirectoryPath(session.cwd || process.cwd())
+    } catch (err) {
+      reject(new Error(`Invalid directory: ${err instanceof Error ? err.message : err}`))
+      return
+    }
+
+    // Kill existing tmux session if it exists (ignore errors)
+    execFile('tmux', ['kill-session', '-t', session.tmuxSession], EXEC_OPTIONS, () => {
+      // Respawn tmux session with claude
+      execFile('tmux', [
+        'new-session',
+        '-d',
+        '-s', session.tmuxSession,
+        '-c', cwd,
+        `PATH=${EXEC_PATH} claude -c --permission-mode=bypassPermissions --dangerously-skip-permissions`
+      ], EXEC_OPTIONS, (error) => {
+        if (error) {
+          reject(new Error(`Failed to restart: ${error.message}`))
+          return
+        }
+
+        // Update session state
+        session.status = 'idle'
+        session.lastActivity = Date.now()
+        session.claudeSessionId = undefined
+        session.currentTool = undefined
+
+        // Clear old linking
+        for (const [claudeId, managedId] of claudeToManagedMap) {
+          if (managedId === session.id) {
+            claudeToManagedMap.delete(claudeId)
+          }
+        }
+
+        log(`Auto-restarted session: ${session.name} (${session.id.slice(0, 8)})`)
+        broadcastSessions()
+        saveSessions()
+
+        resolve()
+      })
+    })
+  })
+}
+
+/**
+ * Send a prompt to a specific session, auto-restarting if tmux is dead
+ */
+async function sendPromptToSession(id: string, prompt: string): Promise<{ ok: boolean; error?: string; restarted?: boolean }> {
   const session = managedSessions.get(id)
   if (!session) {
     return { ok: false, error: 'Session not found' }
@@ -952,6 +1015,25 @@ async function sendPromptToSession(id: string, prompt: string): Promise<{ ok: bo
     log(`Prompt sent to ${session.name}: ${prompt.slice(0, 50)}...`)
     return { ok: true }
   } catch (error) {
+    // If tmux server isn't running, try to restart the session
+    if (isTmuxSessionDead(error)) {
+      log(`tmux not running, auto-restarting session ${session.name}...`)
+      try {
+        await restartManagedSession(session)
+        // Wait a moment for claude to start
+        await new Promise(r => setTimeout(r, 500))
+        // Retry sending the prompt
+        await sendToTmuxSafe(session.tmuxSession, prompt)
+        session.lastActivity = Date.now()
+        log(`Prompt sent to ${session.name} after restart: ${prompt.slice(0, 50)}...`)
+        return { ok: true, restarted: true }
+      } catch (restartError) {
+        const msg = restartError instanceof Error ? restartError.message : String(restartError)
+        log(`Failed to restart and send to ${session.name}: ${msg}`)
+        return { ok: false, error: msg }
+      }
+    }
+
     const msg = error instanceof Error ? error.message : String(error)
     log(`Failed to send prompt to ${session.name}: ${msg}`)
     return { ok: false, error: msg }
@@ -1631,7 +1713,37 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
               res.writeHead(200, { 'Content-Type': 'application/json' })
               res.end(JSON.stringify({ ok: true, saved: PENDING_PROMPT_FILE, sent: true }))
             })
-            .catch((error) => {
+            .catch(async (error) => {
+              // If tmux server isn't running, create a new managed session
+              if (isTmuxSessionDead(error)) {
+                log('tmux not running, creating default session...')
+                try {
+                  const session = await createSession({ name: 'Default' })
+                  // Wait for claude to start
+                  await new Promise(r => setTimeout(r, 500))
+                  await sendToTmuxSafe(session.tmuxSession, prompt)
+                  session.lastActivity = Date.now()
+                  log(`Created default session and sent prompt: ${prompt.slice(0, 50)}...`)
+                  res.writeHead(200, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({
+                    ok: true,
+                    saved: PENDING_PROMPT_FILE,
+                    sent: true,
+                    createdSession: session.id
+                  }))
+                  return
+                } catch (createError) {
+                  log(`Failed to create default session: ${createError instanceof Error ? createError.message : createError}`)
+                  res.writeHead(200, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({
+                    ok: true,
+                    saved: PENDING_PROMPT_FILE,
+                    sent: false,
+                    tmuxError: error.message
+                  }))
+                  return
+                }
+              }
               log(`tmux send failed: ${error.message}`)
               res.writeHead(200, { 'Content-Type': 'application/json' })
               res.end(JSON.stringify({
@@ -2062,52 +2174,15 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
         return
       }
 
-      let cwd: string
-      try {
-        cwd = validateDirectoryPath(session.cwd || process.cwd())
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ ok: false, error: `Invalid directory: ${err instanceof Error ? err.message : err}` }))
-        return
-      }
-
-      // Kill existing tmux session if it exists (ignore errors)
-      execFile('tmux', ['kill-session', '-t', session.tmuxSession], EXEC_OPTIONS, () => {
-        // Respawn tmux session with claude using execFile
-        execFile('tmux', [
-          'new-session',
-          '-d',
-          '-s', session.tmuxSession,
-          '-c', cwd,
-          `PATH=${EXEC_PATH} claude -c --permission-mode=bypassPermissions --dangerously-skip-permissions`
-        ], EXEC_OPTIONS, (error) => {
-          if (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ ok: false, error: `Failed to restart: ${error.message}` }))
-            return
-          }
-
-          // Update session state
-          session.status = 'idle'
-          session.lastActivity = Date.now()
-          session.claudeSessionId = undefined // Will be re-linked when events come in
-          session.currentTool = undefined
-
-          // Clear old linking
-          for (const [claudeId, managedId] of claudeToManagedMap) {
-            if (managedId === session.id) {
-              claudeToManagedMap.delete(claudeId)
-            }
-          }
-
-          log(`Restarted session: ${session.name} (${session.id.slice(0, 8)})`)
-          broadcastSessions()
-          saveSessions()
-
+      restartManagedSession(session)
+        .then(() => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ ok: true, session }))
         })
-      })
+        .catch((error) => {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: error.message }))
+        })
       return
     }
 

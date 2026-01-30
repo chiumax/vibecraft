@@ -37,6 +37,7 @@ import type {
 import { DEFAULTS } from '../shared/defaults.js'
 import { GitStatusManager } from './GitStatusManager.js'
 import { ProjectsManager } from './ProjectsManager.js'
+import { ptyManager } from './PtyManager.js'
 import { fileURLToPath } from 'url'
 
 // ============================================================================
@@ -780,7 +781,7 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
     sessionCounter++
     const name = options.name || `Claude ${sessionCounter}`
 
-    // Use sanitized name for tmux session, with fallback to random ID
+    // Use sanitized name for session identifier
     const baseTmuxName = options.name ? sanitizeTmuxName(options.name) : `claude-${sessionCounter}`
     // Add short suffix to ensure uniqueness
     const tmuxSession = `${baseTmuxName}-${shortId().slice(0, 4)}`
@@ -814,25 +815,15 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
 
     const claudeCmd = claudeArgs.length > 0 ? `claude ${claudeArgs.join(' ')}` : 'claude'
 
-    // Spawn tmux session with claude using execFile to prevent shell injection
-    // Arguments are passed as array, not interpolated into a shell string
-    execFile('tmux', [
-      'new-session',
-      '-d',
-      '-s', tmuxSession,
-      '-c', cwd,
-      `PATH=${EXEC_PATH} ${claudeCmd}`
-    ], EXEC_OPTIONS, (error) => {
-      if (error) {
-        log(`Failed to spawn session: ${error.message}`)
-        reject(new Error(`Failed to spawn session: ${error.message}`))
-        return
-      }
+    // Always use PTY mode (terminal-first UI)
+    try {
+      // Create tmux session with Claude (PTY will attach when browser subscribes)
+      const ptySession = ptyManager.create(id, cwd, claudeArgs, tmuxSession)
 
       const session: ManagedSession = {
         id,
         name,
-        tmuxSession,
+        tmuxSession: ptySession.tmuxSession, // Use actual tmux session name
         status: 'idle',
         createdAt: Date.now(),
         lastActivity: Date.now(),
@@ -840,21 +831,21 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
       }
 
       managedSessions.set(id, session)
-      log(`Created session: ${name} (${id.slice(0, 8)}) -> tmux:${tmuxSession} cmd:'${claudeCmd}'`)
+      log(`Created PTY session: ${name} (${id.slice(0, 8)}) -> tmux:${ptySession.tmuxSession} cmd:'${claudeCmd}'`)
 
       // Track git status for this session
       if (cwd) {
         gitStatusManager.track(id, cwd)
-        // Remember this directory for future autocomplete
         projectsManager.addProject(cwd, name)
       }
 
-      // Broadcast and persist
       broadcastSessions()
       saveSessions()
-
       resolve(session)
-    })
+    } catch (error) {
+      log(`Failed to spawn PTY session: ${(error as Error).message}`)
+      reject(new Error(`Failed to spawn PTY session: ${(error as Error).message}`))
+    }
   })
 }
 
@@ -1144,6 +1135,14 @@ function loadSessions(): void {
         session.status = 'offline'
         session.currentTool = undefined
         managedSessions.set(session.id, session)
+
+        // Register with PTY manager so browser can reconnect to terminal
+        // (PTY sessions are always used now - terminal-first UI)
+        if (session.tmuxSession) {
+          ptyManager.register(session.id, session.tmuxSession)
+          debug(`Registered PTY session: ${session.name} -> ${session.tmuxSession}`)
+        }
+
         // Track git status if session has a cwd
         if (session.cwd) {
           gitStatusManager.track(session.id, session.cwd)
@@ -1566,6 +1565,40 @@ function handleClientMessage(ws: WebSocket, message: ClientMessage) {
     case 'permission_response': {
       const { sessionId, response } = message.payload
       sendPermissionResponse(sessionId, response)
+      break
+    }
+
+    // PTY terminal messages
+    case 'pty:subscribe': {
+      const { sessionId } = message
+      if (ptyManager.subscribe(sessionId, ws)) {
+        debug(`Client subscribed to PTY: ${sessionId}`)
+      } else {
+        ws.send(JSON.stringify({ type: 'error', payload: { message: `PTY session not found: ${sessionId}` } }))
+      }
+      break
+    }
+
+    case 'pty:unsubscribe': {
+      const { sessionId } = message
+      ptyManager.unsubscribe(sessionId, ws)
+      debug(`Client unsubscribed from PTY: ${sessionId}`)
+      break
+    }
+
+    case 'pty:input': {
+      const { sessionId, data } = message
+      if (!ptyManager.write(sessionId, data)) {
+        debug(`Failed to write to PTY: ${sessionId}`)
+      }
+      break
+    }
+
+    case 'pty:resize': {
+      const { sessionId, cols, rows } = message
+      if (ptyManager.resize(sessionId, cols, rows)) {
+        debug(`Resized PTY ${sessionId} to ${cols}x${rows}`)
+      }
       break
     }
 
@@ -2506,6 +2539,7 @@ function main() {
 
     ws.on('close', () => {
       stopVoiceSession(ws) // Clean up any voice session
+      ptyManager.unsubscribeAll(ws) // Clean up PTY subscriptions
       clients.delete(ws)
       log(`Client disconnected (${clients.size} total)`)
     })
@@ -2513,6 +2547,7 @@ function main() {
     ws.on('error', (error) => {
       debug(`WebSocket error: ${error}`)
       stopVoiceSession(ws) // Clean up any voice session
+      ptyManager.unsubscribeAll(ws) // Clean up PTY subscriptions
       clients.delete(ws)
     })
   })

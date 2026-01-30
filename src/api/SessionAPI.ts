@@ -37,11 +37,13 @@ export function createSessionAPI(apiUrl: string) {
   return {
     /**
      * Create a new managed session
+     * Note: PTY is now the only mode - usePty parameter kept for API compatibility
      */
     async createSession(
       name?: string,
       cwd?: string,
-      flags?: SessionFlags
+      flags?: SessionFlags,
+      _usePty?: boolean // Ignored - PTY is always used
     ): Promise<CreateSessionResponse> {
       try {
         const response = await fetch(`${apiUrl}/sessions`, {

@@ -29,7 +29,7 @@ import { setupVoiceControl, type VoiceState } from './ui/VoiceControl'
 import { getToolIcon } from './utils/ToolUtils'
 import { AttentionSystem } from './systems/AttentionSystem'
 import { TimelineManager } from './ui/TimelineManager'
-import { FeedManager, formatTokens, formatTimeAgo, escapeHtml } from './ui/FeedManager'
+import { formatTokens, formatTimeAgo, escapeHtml } from './ui/FeedManager'
 import { ContextMenu, type ContextMenuContext } from './ui/ContextMenu'
 import { setupKeyboardShortcuts, getSessionKeybind } from './ui/KeyboardShortcuts'
 import { setupKeybindSettings, updateVoiceHint } from './ui/KeybindSettings'
@@ -54,12 +54,13 @@ import {
   showPermissionModal,
   hidePermissionModal,
 } from './ui/PermissionModal'
-import { setupSlashCommands, isSlashCommand } from './ui/SlashCommands'
+// Removed: SlashCommands (no longer needed without prompt form)
 import { setupDirectoryAutocomplete } from './ui/DirectoryAutocomplete'
 import { checkForUpdates } from './ui/VersionChecker'
 import { drawMode } from './ui/DrawMode'
 import { setupTextLabelModal, showTextLabelModal } from './ui/TextLabelModal'
 import { createSessionAPI, type SessionAPI } from './api'
+import { TerminalManager } from './ui/Terminal'
 
 // ============================================================================
 // Configuration
@@ -123,15 +124,12 @@ interface AppState {
   serverCwd: string  // Server's working directory
   attentionSystem: AttentionSystem | null  // Manages attention queue and notifications
   timelineManager: TimelineManager | null  // Manages icon timeline
-  feedManager: FeedManager | null  // Manages activity feed
+  terminalManager: TerminalManager | null  // Manages PTY terminal sessions
   soundEnabled: boolean  // Whether to play sounds
   hasAutoOverviewed: boolean  // Whether we've done initial auto-overview for 2+ sessions
   userChangedCamera: boolean  // Whether user has manually changed camera (to avoid overriding)
   voice: VoiceState | null  // Voice input state and controls
   lastPrompts: Map<string, string>  // Last prompt sent per Claude session ID
-  promptHistory: string[]  // History of sent prompts for up/down navigation
-  historyIndex: number  // Current position in history (-1 = not navigating)
-  historyDraft: string  // Saved draft when navigating history
 }
 
 const state: AppState = {
@@ -145,15 +143,12 @@ const state: AppState = {
   selectedManagedSession: null,
   attentionSystem: null,  // Initialized in init()
   timelineManager: null,  // Initialized in init()
-  feedManager: null,  // Initialized in init()
+  terminalManager: null,  // Initialized in init()
   soundEnabled: true,
   hasAutoOverviewed: false,
   userChangedCamera: false,
   voice: null,  // Initialized in setupVoiceInput()
   lastPrompts: new Map(),
-  promptHistory: [],
-  historyIndex: -1,
-  historyDraft: '',
 }
 
 // Expose for console testing (can remove in production)
@@ -185,28 +180,6 @@ function renderManagedSessions(): void {
   if (!container) return
 
   container.innerHTML = ''
-
-  // Update "All Sessions" count
-  const allCount = document.getElementById('all-sessions-count')
-  if (allCount) {
-    const count = state.managedSessions.length
-    const working = state.managedSessions.filter(s => s.status === 'working').length
-    if (count === 0) {
-      allCount.textContent = 'Click "+ New" to start'
-    } else if (working > 0) {
-      allCount.textContent = `${count} session${count > 1 ? 's' : ''}, ${working} working`
-      allCount.className = 'session-detail working'
-    } else {
-      allCount.textContent = `${count} session${count > 1 ? 's' : ''}`
-      allCount.className = 'session-detail'
-    }
-  }
-
-  // Update "All Sessions" active state
-  const allItem = document.querySelector('.session-item.all-sessions')
-  if (allItem) {
-    allItem.classList.toggle('active', state.selectedManagedSession === null)
-  }
 
   state.managedSessions.forEach((session, index) => {
     const el = document.createElement('div')
@@ -348,35 +321,26 @@ function selectManagedSession(sessionId: string | null): void {
     localStorage.removeItem('vibecraft-selected-session')
   }
 
-  // Update feed filter to show only this session's events (or all if null)
+  // Show terminal for selected session (PTY is now the only mode)
   if (sessionId) {
     const session = state.managedSessions.find(s => s.id === sessionId)
-    // Filter by claudeSessionId if available, otherwise show nothing (session has no events yet)
-    state.feedManager?.setFilter(session?.claudeSessionId ?? '__none__')
 
     // Focus the 3D zone if session is linked
     if (session?.claudeSessionId && state.scene) {
       state.scene.focusZone(session.claudeSessionId)
       focusSession(session.claudeSessionId)
     }
+
+    // Show terminal for this session
+    showTerminalForSession(sessionId)
   } else {
-    state.feedManager?.setFilter(null)  // Show all sessions
+    hideTerminal()
 
     // Switch to overview mode showing all zones
     if (state.scene) {
       state.scene.setOverviewMode()
     }
   }
-
-  // Update prompt target indicator for "all sessions" / null selection
-  if (!sessionId) {
-    const targetEl = document.getElementById('prompt-target')
-    if (targetEl) {
-      targetEl.innerHTML = '<span style="color: rgba(255,255,255,0.4)">all sessions</span>'
-      targetEl.title = 'Select a session to send prompts'
-    }
-  }
-  // Note: when sessionId is set, focusSession() handles the prompt target update
 }
 
 /**
@@ -395,7 +359,8 @@ async function createManagedSession(
   hintPosition?: { x: number; z: number },
   pendingZoneId?: string
 ): Promise<void> {
-  const data = await sessionAPI.createSession(name, cwd, flags)
+  // PTY is now the only mode - always use PTY
+  const data = await sessionAPI.createSession(name, cwd, flags, true)
 
   if (!data.ok) {
     console.error('Failed to create session:', data.error)
@@ -436,8 +401,6 @@ async function fetchServerInfo(): Promise<void> {
   const data = await sessionAPI.getServerInfo()
   if (data.ok && data.cwd) {
     state.serverCwd = data.cwd
-    // Update feed manager for path shortening
-    state.feedManager?.setCwd(data.cwd)
     // Update modal display
     const cwdEl = document.getElementById('modal-default-cwd')
     if (cwdEl) {
@@ -755,14 +718,6 @@ function setupManagedSessions(): void {
   }
   nameInput?.addEventListener('keydown', handleEnter)
   cwdInput?.addEventListener('keydown', handleEnter)
-
-  // "All Sessions" click handler
-  const allItem = document.querySelector('.session-item.all-sessions')
-  if (allItem) {
-    allItem.addEventListener('click', () => {
-      selectManagedSession(null)
-    })
-  }
 
   // Initial render
   renderManagedSessions()
@@ -1119,15 +1074,11 @@ function setupClickToPrompt(): void {
           soundManager.play('focus')
         }
 
-        // Select the managed session if linked, otherwise clear selection
+        // Select the managed session if linked
         const managed = state.managedSessions.find(s => s.claudeSessionId === sessionId)
         if (managed) {
           selectManagedSession(managed.id)
           state.attentionSystem?.remove(managed.id)
-        } else {
-          // Legacy/unlinked session - clear managed selection but filter to this session
-          selectManagedSession(null)
-          state.feedManager?.setFilter(sessionId)
         }
         return
       }
@@ -1150,10 +1101,6 @@ function setupClickToPrompt(): void {
         if (managed) {
           selectManagedSession(managed.id)
           state.attentionSystem?.remove(managed.id)
-        } else {
-          // Legacy/unlinked session - clear managed selection but filter to this session
-          selectManagedSession(null)
-          state.feedManager?.setFilter(sessionId)
         }
         return
       }
@@ -1844,7 +1791,6 @@ function handleEvent(event: ClaudeEvent) {
   // This runs in parallel with the old switch statement during migration
   const eventContext: EventContext = {
     scene: state.scene,
-    feedManager: state.feedManager,
     timelineManager: state.timelineManager,
     soundEnabled: state.soundEnabled,
     session: session ? {
@@ -1858,10 +1804,9 @@ function handleEvent(event: ClaudeEvent) {
   }
   eventBus.emit(event.type as EventType, event as any, eventContext)
 
-  // If no session (unlinked), still add to feed/timeline with default color but skip 3D updates
+  // If no session (unlinked), still add to timeline with default color but skip 3D updates
   const eventColor = session?.color ?? 0x888888
   state.timelineManager?.add(event, eventColor)
-  state.feedManager?.add(event, eventColor)
 
   // Skip 3D scene updates for unlinked sessions
   if (!session) {
@@ -1957,10 +1902,6 @@ function handleEvent(event: ClaudeEvent) {
 
       // [Sound, zone status, character state handled by EventBus]
 
-      // Show thinking indicator AFTER feedManager.add() to ensure correct order
-      // (prompt appears first, then thinking indicator)
-      state.feedManager?.showThinking(event.sessionId, session.color)
-
       // Update UI badge (zone attention cleared by zoneHandlers)
       updateAttentionBadge()
       updateActivity('Processing prompt...')
@@ -2034,286 +1975,77 @@ async function interruptSession(sessionName: string): Promise<void> {
   }
 }
 
-function setupPromptForm() {
-  const form = document.getElementById('prompt-form') as HTMLFormElement | null
-  const input = document.getElementById('prompt-input') as HTMLTextAreaElement | null
-  const button = document.getElementById('prompt-submit') as HTMLButtonElement | null
-  const cancelBtn = document.getElementById('prompt-cancel') as HTMLButtonElement | null
-  const status = document.getElementById('prompt-status')
+// Removed: setupPromptForm - Terminal is now the primary interface for input
+// Prompts are sent directly through the PTY terminal
 
-  if (!form || !input || !button) return
-
-  // Auto-expand textarea as user types
-  const autoExpand = () => {
-    input.style.height = 'auto'
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-  }
-  input.addEventListener('input', () => {
-    autoExpand()
-    // Reset history navigation when user types
-    state.historyIndex = -1
-    state.historyDraft = ''
-  })
-
-  // Setup slash command autocomplete
-  setupSlashCommands(input)
-
-  // Keyboard handling: Enter to send, Up/Down for history
-  // Note: Skip if slash commands already handled the event
-  input.addEventListener('keydown', (e) => {
-    // Enter to send (Ctrl+Enter for newline)
-    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.defaultPrevented) {
-      e.preventDefault()
-      form.requestSubmit()
-      return
-    }
-
-    // Up arrow: navigate to older history
-    if (e.key === 'ArrowUp' && !e.defaultPrevented) {
-      // Only handle if cursor is at start of input (or input is single line)
-      const atStart = input.selectionStart === 0 && input.selectionEnd === 0
-      const isSingleLine = !input.value.includes('\n')
-      if (!atStart && !isSingleLine) return
-
-      if (state.promptHistory.length === 0) return
-
-      e.preventDefault()
-
-      // Save current input as draft when starting navigation
-      if (state.historyIndex === -1) {
-        state.historyDraft = input.value
-      }
-
-      // Move back in history
-      const newIndex = Math.min(state.historyIndex + 1, state.promptHistory.length - 1)
-      if (newIndex !== state.historyIndex) {
-        state.historyIndex = newIndex
-        input.value = state.promptHistory[state.promptHistory.length - 1 - newIndex]
-        autoExpand()
-      }
-      return
-    }
-
-    // Down arrow: navigate to newer history
-    if (e.key === 'ArrowDown' && !e.defaultPrevented) {
-      // Only handle if navigating history
-      if (state.historyIndex === -1) return
-
-      // Only handle if cursor is at end of input (or input is single line)
-      const atEnd = input.selectionStart === input.value.length
-      const isSingleLine = !input.value.includes('\n')
-      if (!atEnd && !isSingleLine) return
-
-      e.preventDefault()
-
-      // Move forward in history
-      state.historyIndex--
-
-      if (state.historyIndex === -1) {
-        // Back to draft
-        input.value = state.historyDraft
-      } else {
-        input.value = state.promptHistory[state.promptHistory.length - 1 - state.historyIndex]
-      }
-      autoExpand()
-    }
-  })
-
-  // Cancel button handler
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', async () => {
-      if (status) {
-        status.textContent = 'Cancelling...'
-        status.className = ''
-      }
-      try {
-        const response = await fetch(CANCEL_URL, { method: 'POST' })
-        const data = await response.json()
-        if (status) {
-          if (data.ok) {
-            status.textContent = 'Cancelled!'
-            status.className = 'success'
-          } else {
-            status.textContent = data.error || 'Cancel failed'
-            status.className = 'error'
-          }
-        }
-      } catch (error) {
-        if (status) {
-          status.textContent = 'Connection error'
-          status.className = 'error'
-        }
-      }
-    })
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault()
-
-    // If voice recording is active, stop it first and wait for transcript
-    if (state.voice?.isRecording) {
-      const transcript = await state.voice.stop()
-      if (transcript) {
-        const existing = input.value.trim()
-        input.value = existing ? existing + ' ' + transcript : transcript
-      }
-    }
-
-    const prompt = input.value.trim()
-    if (!prompt) return
-
-    // Always send prompts to Claude Code
-    const isCommand = isSlashCommand(prompt)
-    const send = true
-
-    button.disabled = true
-    if (status) {
-      status.textContent = send ? 'Sending to Claude...' : 'Saving...'
-      status.className = ''
-    }
-
-    try {
-      let data: { ok: boolean; error?: string; sent?: boolean; saved?: string; tmuxError?: string }
-
-      // If a managed session is selected, use the session API
-      if (state.selectedManagedSession && send) {
-        const session = state.managedSessions.find(s => s.id === state.selectedManagedSession)
-        data = await sendPromptToManagedSession(prompt)
-        if (data.ok && status) {
-          status.textContent = `Sent to ${session?.name || 'session'}!`
-          status.className = 'success'
-          // Add to history and reset navigation
-          state.promptHistory.push(prompt)
-          state.historyIndex = -1
-          state.historyDraft = ''
-          input.value = ''
-          input.style.height = 'auto'
-          state.feedManager?.scrollToBottom()
-        } else if (!data.ok && status) {
-          status.textContent = data.error || 'Failed to send'
-          status.className = 'error'
-        }
-      } else {
-        // Legacy: send to default tmux session
-        const response = await fetch(PROMPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, send }),
-        })
-        data = await response.json()
-
-        if (data.ok) {
-          // Add to history and reset navigation
-          state.promptHistory.push(prompt)
-          state.historyIndex = -1
-          state.historyDraft = ''
-          input.value = ''
-          input.style.height = 'auto' // Reset height after submit
-          state.feedManager?.scrollToBottom()
-          if (status) {
-            if (data.sent) {
-              status.textContent = 'Sent to Claude!'
-            } else if (data.tmuxError) {
-              status.textContent = `Saved (tmux error: ${data.tmuxError})`
-              status.className = 'error'
-              return
-            } else {
-              status.textContent = `Saved to ${data.saved}`
-            }
-            status.className = 'success'
-          }
-        } else {
-          if (status) {
-            status.textContent = data.error || 'Failed to send'
-            status.className = 'error'
-          }
-        }
-      }
-    } catch (error) {
-      if (status) {
-        status.textContent = 'Connection error'
-        status.className = 'error'
-      }
-    } finally {
-      button.disabled = false
-    }
-  })
-
-  // Auto-focus input when tab/window becomes active
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      input.focus()
-    }
-  })
-
-  window.addEventListener('focus', () => {
-    input.focus()
-  })
-
-  // Focus when hovering over the right panel (activity feed area)
-  const feedPanel = document.getElementById('feed-panel')
-  if (feedPanel) {
-    feedPanel.addEventListener('mouseenter', () => {
-      input.focus()
-    })
-  }
-
-  // Focus on initial load
-  input.focus()
+function _unusedPromptFormPlaceholder() {
+  // This function is intentionally empty - the prompt form has been removed
+  // in favor of terminal-first UI. All input goes through the PTY terminal.
 }
 
 // ============================================================================
-// Terminal Output Panel
+// Terminal Output Panel (PTY via xterm.js)
 // ============================================================================
 
-const TMUX_URL = `${API_URL}/tmux-output`
-
-let terminalPollInterval: number | null = null
-
-function setupTerminalToggle() {
-  const toggle = document.getElementById('terminal-toggle')
+function setupTerminalPanel() {
   const panel = document.getElementById('terminal-panel')
   const output = document.getElementById('terminal-output')
+  const expandBtn = document.getElementById('terminal-expand')
+  const sessionName = document.getElementById('terminal-session-name')
 
-  if (!toggle || !panel || !output) return
+  if (!panel || !output) return
 
-  toggle.addEventListener('click', () => {
-    const isHidden = panel.classList.toggle('hidden')
-    toggle.classList.toggle('active', !isHidden)
+  // Initialize terminal manager
+  state.terminalManager = new TerminalManager(output)
 
-    if (!isHidden) {
-      // Start polling when visible
-      fetchTerminalOutput()
-      terminalPollInterval = window.setInterval(fetchTerminalOutput, 2000)
-    } else {
-      // Stop polling when hidden
-      if (terminalPollInterval) {
-        clearInterval(terminalPollInterval)
-        terminalPollInterval = null
-      }
-    }
-  })
-
-  async function fetchTerminalOutput() {
-    if (!output || !panel) return
-    try {
-      const response = await fetch(TMUX_URL)
-      const data = await response.json()
-      if (data.ok && data.output) {
-        // Strip ANSI codes and clean up
-        const cleaned = data.output
-          .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '') // Remove ANSI codes
-          .replace(/\r/g, '') // Remove carriage returns
-        output.textContent = cleaned
-        // Auto-scroll to bottom
-        panel.scrollTop = panel.scrollHeight
-      } else if (data.error) {
-        output.textContent = `Error: ${data.error}`
-      }
-    } catch (e) {
-      output.textContent = 'Failed to connect to server'
-    }
+  // Connect terminal manager to EventClient
+  if (state.client) {
+    state.terminalManager.setSendFunction((msg) => state.client?.sendRaw(msg))
   }
+
+  // Expand/collapse button
+  expandBtn?.addEventListener('click', () => {
+    panel.classList.toggle('expanded')
+    state.terminalManager?.getActiveSessionId() &&
+      state.terminalManager.getOrCreate(state.terminalManager.getActiveSessionId()!).fit()
+  })
+}
+
+/**
+ * Show terminal for a session (PTY is now the only mode)
+ */
+function showTerminalForSession(sessionId: string) {
+  const panel = document.getElementById('terminal-panel')
+  const sessionName = document.getElementById('terminal-session-name')
+  const indicator = panel?.querySelector('.terminal-indicator')
+
+  const session = state.managedSessions.find(s => s.id === sessionId)
+  if (!session || !state.terminalManager) return
+
+  // Create/get terminal and show it
+  const terminal = state.terminalManager.getOrCreate(sessionId)
+  state.terminalManager.show(sessionId)
+
+  // Update header
+  if (sessionName) sessionName.textContent = session.name
+  if (indicator) {
+    indicator.classList.toggle('offline', session.status === 'offline')
+  }
+
+  // Show panel
+  panel?.classList.remove('hidden')
+
+  // Fit after a short delay to ensure container is visible
+  requestAnimationFrame(() => terminal.fit())
+}
+
+/**
+ * Hide terminal panel (when no session selected)
+ */
+function hideTerminal() {
+  const panel = document.getElementById('terminal-panel')
+  panel?.classList.add('hidden')
+  state.terminalManager?.hideAll()
 }
 
 // ============================================================================
@@ -2707,10 +2439,6 @@ function init() {
   // Initialize timeline manager
   state.timelineManager = new TimelineManager()
 
-  // Initialize feed manager
-  state.feedManager = new FeedManager()
-  state.feedManager.setupScrollButton()
-
   // Register EventBus handlers (decoupled event handling)
   registerAllHandlers()
 
@@ -2730,6 +2458,13 @@ function init() {
     if (connected) {
       hasConnected = true
       hideNotConnectedOverlay()
+
+      // Update terminal manager's send function and resubscribe to PTY sessions
+      if (state.terminalManager) {
+        state.terminalManager.setSendFunction((msg) => state.client?.sendRaw(msg))
+        // Resubscribe all terminals after reconnection
+        state.terminalManager.resubscribeAll()
+      }
     }
   })
 
@@ -2942,7 +2677,7 @@ function init() {
     }
   })
 
-  // Handle permission prompts and text tiles
+  // Handle permission prompts, text tiles, and PTY messages
   state.client.onRawMessage((message) => {
     if (message.type === 'permission_prompt') {
       const { sessionId, tool, context, options } = message.payload as {
@@ -2960,16 +2695,23 @@ function init() {
       if (state.scene) {
         state.scene.setTextTiles(tiles)
       }
+    } else if (message.type.startsWith('pty:')) {
+      // Handle PTY terminal messages
+      if (state.terminalManager) {
+        state.terminalManager.handleMessage(message as {
+          type: string
+          sessionId: string
+          data?: string
+          exitCode?: number
+        })
+      }
     }
   })
 
   state.client.connect()
 
-  // Setup prompt form
-  setupPromptForm()
-
-  // Setup terminal toggle
-  setupTerminalToggle()
+  // Setup terminal panel (PTY is now the primary interface)
+  setupTerminalPanel()
 
   // Setup managed sessions (orchestration)
   setupManagedSessions()

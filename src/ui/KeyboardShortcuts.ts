@@ -2,16 +2,16 @@
  * KeyboardShortcuts - Global keyboard shortcut handling
  *
  * Handles:
- * - Focus switching (Tab/Escape by default, editable)
+ * - Focus switching (Tab/Escape) - toggles between 3D canvas and terminal
  * - 1-6: Sessions 1-6 (shown in UI)
  * - QWERTY: Sessions 7-12 (extended keybinds, not shown)
  * - ASDFGH: Sessions 13-18 (extended keybinds, not shown)
  * - ZXCVBN: Sessions 19-24 (extended keybinds, not shown)
  * - Alt+key works in inputs, plain keys work outside inputs
- * - 0/`: Overview mode
+ * - 0/`: Overview mode (deselect session, hide terminal)
  * - Alt+N: New session
- * - Alt+E: Expand feed item
  * - F: Follow mode toggle
+ * - D: Draw mode toggle
  * - Alt+D: Dev panel toggle
  */
 
@@ -121,19 +121,19 @@ export function setupKeyboardShortcuts(ctx: KeyboardShortcutContext): void {
     }
 
     // Focus toggle (Tab/Escape by default, user-configurable)
-    // Handle before other checks so it works from inputs
+    // With terminal-first UI, this toggles between 3D canvas and terminal
     if (!isModal && keybindManager.matches('focus-toggle', e)) {
       e.preventDefault()
-      const promptInput = document.getElementById('prompt-input') as HTMLTextAreaElement
+      const terminal = document.querySelector('.terminal-wrapper .xterm-helper-textarea') as HTMLTextAreaElement
       const canvas = scene?.renderer?.domElement
 
       if (inInput) {
-        // Currently in feed/prompt area - switch to workshop (blur input, focus canvas)
+        // Currently in terminal/input area - switch to workshop (blur input, focus canvas)
         ;(e.target as HTMLElement).blur()
         canvas?.focus()
-      } else {
-        // Currently in workshop area - switch to feed (focus prompt input)
-        promptInput?.focus()
+      } else if (terminal) {
+        // Currently in workshop area - switch to terminal (focus terminal input)
+        terminal.focus()
       }
       return
     }
@@ -222,13 +222,13 @@ export function setupKeyboardShortcuts(ctx: KeyboardShortcutContext): void {
       return
     }
 
-    // 0 or backtick for all sessions / overview (backtick is left-hand friendly)
+    // 0 or backtick for overview mode (deselect session, show all zones)
     // Plain backtick works outside inputs, Alt+` works everywhere
     if (e.key === '0' || e.key === '`' || (e.altKey && e.key === '`')) {
       if (e.key === '`' && inInput && !e.altKey) return // Don't capture plain ` in inputs
       e.preventDefault()
       ctx.onSetUserChangedCamera(true)
-      ctx.onSelectManagedSession(null)
+      ctx.onSelectManagedSession(null)  // Deselects session, hides terminal
       scene.setOverviewMode()
       return
     }
@@ -242,18 +242,6 @@ export function setupKeyboardShortcuts(ctx: KeyboardShortcutContext): void {
       if (modal) {
         modal.classList.add('visible')
         setTimeout(() => nameInput?.focus(), 100)
-      }
-      return
-    }
-
-    // Alt+E to expand most recent "show more" in feed
-    if (e.altKey && (e.key === 'e' || e.key === 'E')) {
-      e.preventDefault()
-      const showMoreElements = document.querySelectorAll('.show-more')
-      if (showMoreElements.length > 0) {
-        // Click the last (most recent) show-more element
-        const lastShowMore = showMoreElements[showMoreElements.length - 1] as HTMLElement
-        lastShowMore.click()
       }
       return
     }

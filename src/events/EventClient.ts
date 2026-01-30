@@ -316,6 +316,13 @@ export class EventClient {
     this.send({ type: 'get_history', payload: { limit } })
   }
 
+  /** Send a raw message to the server (for PTY and other custom messages) */
+  sendRaw(message: Record<string, unknown>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message))
+    }
+  }
+
   /** Force reconnect (useful when connection seems stale) */
   forceReconnect(): void {
     this.log('Force reconnecting...')

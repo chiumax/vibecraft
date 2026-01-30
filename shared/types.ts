@@ -167,6 +167,10 @@ export type ServerMessage =
   | { type: 'permission_resolved'; payload: { sessionId: string } }
   | { type: 'text_tiles'; payload: TextTile[] }
   | { type: 'pong'; payload: { timestamp: number } }
+  // PTY terminal messages
+  | { type: 'pty:output'; sessionId: string; data: string }
+  | { type: 'pty:buffer'; sessionId: string; data: string }
+  | { type: 'pty:exit'; sessionId: string; exitCode: number }
 
 /** Client -> Server messages */
 export type ClientMessage =
@@ -176,6 +180,11 @@ export type ClientMessage =
   | { type: 'voice_start' }
   | { type: 'voice_stop' }
   | { type: 'permission_response'; payload: { sessionId: string; response: string } }
+  // PTY terminal messages
+  | { type: 'pty:subscribe'; sessionId: string }
+  | { type: 'pty:unsubscribe'; sessionId: string }
+  | { type: 'pty:input'; sessionId: string; data: string }
+  | { type: 'pty:resize'; sessionId: string; cols: number; rows: number }
 
 // ============================================================================
 // Visualization State
@@ -270,7 +279,7 @@ export interface ManagedSession {
   id: string
   /** User-friendly name ("Frontend", "Tests") */
   name: string
-  /** Actual tmux session name */
+  /** Actual tmux session name (also used as PTY session ID) */
   tmuxSession: string
   /** Current status */
   status: SessionStatus
@@ -296,6 +305,7 @@ export interface ManagedSession {
     q: number
     r: number
   }
+  // Note: usePty field removed - PTY is now the only mode
 }
 
 /** Git repository status */
@@ -358,6 +368,7 @@ export interface CreateSessionRequest {
     skipPermissions?: boolean  // --dangerously-skip-permissions
     chrome?: boolean        // --chrome
   }
+  // Note: usePty field removed - PTY is now the only mode
 }
 
 /** Request to update a session */

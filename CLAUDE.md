@@ -591,6 +591,38 @@ Client rebuilds its local `claudeToManagedLink` map from server data on every `s
 - **Station panels**: Toggle with P key to see recent tool history per workstation (last 3 items)
 - **Station glow pulse**: Brief ring highlight when tools use stations
 - **Zone Command modal**: Right-click zone → C for quick prompt input positioned near the 3D zone
+- **Browser terminal (PTY)**: Full xterm.js terminal in browser, backed by tmux for persistence (see [docs/PTY-TERMINAL.md](docs/PTY-TERMINAL.md))
+
+## Browser Terminal (PTY Mode)
+
+See **[docs/PTY-TERMINAL.md](docs/PTY-TERMINAL.md)** for complete documentation including architecture evolution and implementation details.
+
+### Architecture
+
+PTY mode renders Claude Code's actual terminal output in the browser using xterm.js, while maintaining tmux persistence:
+
+```
+Browser (xterm.js)
+    ↕ WebSocket
+Node.js server
+    ↕ PTY (node-pty)
+tmux attach -t session
+    ↕
+tmux session (persistent)
+    └── claude process
+```
+
+**Key files:**
+- `server/PtyManager.ts` - Manages tmux sessions and PTY attachments
+- `src/ui/Terminal.ts` - xterm.js terminal UI and WebSocket integration
+
+**Benefits over hooks-only mode:**
+- See actual terminal output (not just events)
+- Full ANSI color and cursor support
+- Claude survives server restart (tmux persistence)
+- Can still attach from native terminal (`tmux attach -t session`)
+
+**Trade-off:** More complex than tmux-only mode, requires node-pty native compilation.
 
 ## Sound System
 
@@ -800,6 +832,9 @@ npx vibecraft
 - [x] **Floating context labels**: Show file paths above stations
 - [x] **Response capture**: Show Claude's responses in activity feed
 - [x] **Sound effects**: Synthesized audio via Tone.js (see Sound System section)
+- [x] **Browser terminal**: Full xterm.js terminal with tmux persistence (see PTY-TERMINAL.md)
 - [ ] **Session replay**: Replay events from events.jsonl
 - [ ] **File system map**: 3D visualization of touched files
 - [ ] **VR support**: WebXR for immersive view
+- [ ] **Multi-viewer terminal**: Multiple browser tabs watching same PTY session
+- [ ] **Terminal recording**: Save and replay terminal sessions

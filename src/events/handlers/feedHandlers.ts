@@ -1,28 +1,14 @@
 /**
  * Feed/UI Event Handlers
  *
- * Handles thinking indicator visibility in the activity feed.
+ * Previously handled thinking indicator visibility in the activity feed.
+ * With the terminal-first UI refactor, the activity feed has been removed.
+ * This file is kept as a placeholder in case we add new feed-like functionality.
  */
-
-import { eventBus } from '../EventBus'
-import type { PreToolUseEvent, StopEvent } from '../../../shared/types'
 
 /**
  * Register feed-related event handlers
  */
 export function registerFeedHandlers(): void {
-  // Hide thinking indicator when tool starts
-  eventBus.on('pre_tool_use', (_event: PreToolUseEvent, ctx) => {
-    if (!ctx.session || !ctx.feedManager) return
-    ctx.feedManager.hideThinking(_event.sessionId)
-  })
-
-  // Hide thinking indicator on stop
-  eventBus.on('stop', (event: StopEvent, ctx) => {
-    if (!ctx.feedManager) return
-    ctx.feedManager.hideThinking(event.sessionId)
-  })
-
-  // NOTE: showThinking for user_prompt_submit is handled in main.ts
-  // AFTER feedManager.add() to ensure correct ordering in the feed
+  // No-op: Activity feed has been removed in favor of terminal-first UI
 }

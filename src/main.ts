@@ -62,6 +62,7 @@ import { setupTextLabelModal, showTextLabelModal } from './ui/TextLabelModal'
 import { createSessionAPI, type SessionAPI } from './api'
 import { TerminalManager, TerminalUI } from './ui/Terminal'
 import { initLayoutManager, getLayoutManager, type LayoutType } from './ui/LayoutManager'
+import { initTodosManager, getTodosManager } from './ui/TodosManager'
 
 // ============================================================================
 // Configuration
@@ -2311,12 +2312,33 @@ function setupShellPanel() {
 }
 
 /**
- * Setup sessions panel tab switching (Sessions / Shell)
+ * Setup sessions panel tab switching (Sessions / Shell / Todos)
  */
 function setupSessionsTabs() {
   const tabs = document.querySelectorAll('.sessions-tab')
   const sessionsList = document.getElementById('sessions-list')
   const shellContent = document.getElementById('shell-tab-content')
+  const todosContent = document.getElementById('todos-tab-content')
+
+  // Initialize todos manager
+  const todosManager = initTodosManager()
+  if (todosContent) {
+    todosManager.init(todosContent)
+  }
+
+  // Update todos badge
+  todosManager.setOnUpdate(() => {
+    updateTodosBadge()
+  })
+  updateTodosBadge()
+
+  // Expose function for TodosManager to get sessions
+  ;(window as any).vibecraftGetSessions = () => {
+    return Array.from(state.managedSessions.values()).map(s => ({
+      id: s.id,
+      name: s.name,
+    }))
+  }
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -2327,11 +2349,13 @@ function setupSessionsTabs() {
       tab.classList.add('active')
 
       // Show/hide content
+      sessionsList?.classList.remove('active')
+      shellContent?.classList.remove('active')
+      todosContent?.classList.remove('active')
+
       if (targetTab === 'sessions') {
         sessionsList?.classList.add('active')
-        shellContent?.classList.remove('active')
       } else if (targetTab === 'shell') {
-        sessionsList?.classList.remove('active')
         shellContent?.classList.add('active')
 
         // Create first shell if none exist
@@ -2345,9 +2369,28 @@ function setupSessionsTabs() {
             terminal?.focus()
           }, 50)
         }
+      } else if (targetTab === 'todos') {
+        todosContent?.classList.add('active')
+        // Re-render in case sessions changed
+        todosManager.render()
       }
     })
   })
+}
+
+/**
+ * Update the todos badge with incomplete count
+ */
+function updateTodosBadge() {
+  const todosManager = getTodosManager()
+  if (!todosManager) return
+
+  const count = todosManager.getTotalIncompleteCount()
+  const badge = document.getElementById('todos-badge')
+  if (badge) {
+    badge.textContent = count.toString()
+    badge.classList.toggle('hidden', count === 0)
+  }
 }
 
 /**

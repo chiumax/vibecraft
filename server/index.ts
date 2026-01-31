@@ -1571,10 +1571,16 @@ function handleClientMessage(ws: WebSocket, message: ClientMessage) {
     // PTY terminal messages
     case 'pty:subscribe': {
       const { sessionId } = message
-      if (ptyManager.subscribe(sessionId, ws)) {
-        debug(`Client subscribed to PTY: ${sessionId}`)
-      } else {
-        ws.send(JSON.stringify({ type: 'error', payload: { message: `PTY session not found: ${sessionId}` } }))
+      try {
+        if (ptyManager.subscribe(sessionId, ws)) {
+          debug(`Client subscribed to PTY: ${sessionId}`)
+        } else {
+          debug(`PTY session not found: ${sessionId}`)
+          ws.send(JSON.stringify({ type: 'error', payload: { message: `PTY session not found: ${sessionId}` } }))
+        }
+      } catch (err) {
+        console.error(`[PTY] Subscribe error for ${sessionId}:`, err)
+        ws.send(JSON.stringify({ type: 'error', payload: { message: `PTY subscribe error: ${err}` } }))
       }
       break
     }

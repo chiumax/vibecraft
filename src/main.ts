@@ -2708,10 +2708,10 @@ function init() {
     }
   })
 
-  state.client.connect()
-
-  // Setup terminal panel (PTY is now the primary interface)
+  // Setup terminal panel BEFORE connect (so it's ready when sessions arrive)
   setupTerminalPanel()
+
+  state.client.connect()
 
   // Setup managed sessions (orchestration)
   setupManagedSessions()

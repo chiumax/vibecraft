@@ -624,6 +624,8 @@ tmux session (persistent)
 
 **Trade-off:** More complex than tmux-only mode, requires node-pty native compilation.
 
+**Troubleshooting:** If terminals don't render, see **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** for common issues (especially `posix_spawnp failed` errors).
+
 ## Sound System
 
 See **[docs/SOUND.md](docs/SOUND.md)** for complete documentation including the full sound catalog, spatial audio system, and implementation guide.

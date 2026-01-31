@@ -10,6 +10,7 @@
   flex-direction: column;
   height: 100dvh;
   width: 100%;
+  overflow: hidden;
 }
 
 /* Panel states */
@@ -25,8 +26,12 @@
 /* Scene panel - fullscreen when visible */
 .tablet-layout #scene-panel {
   position: fixed;
-  inset: 0;
-  bottom: var(--mobile-nav-height);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  height: auto;
+  width: 100%;
   z-index: 50;
   background: #0a0a0f;
 }
@@ -35,19 +40,32 @@
   display: block !important;
 }
 
-/* Feed panel - fullscreen */
+.tablet-layout #canvas-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Feed panel - fills available space above nav */
 .tablet-layout #feed-panel {
+  position: relative;
+  width: 100%;
+  height: auto;
   flex: 1;
-  padding-bottom: var(--mobile-nav-height);
+  min-height: 0;
+  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
   background: #111;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Terminal panel - fullscreen overlay */
 .tablet-layout #terminal-panel {
   position: fixed;
-  inset: 0;
-  bottom: var(--mobile-nav-height);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
   z-index: 60;
   background: #0f172a;
   border: none;
@@ -56,8 +74,10 @@
 /* Shell panel - fullscreen overlay */
 .tablet-layout #shell-panel {
   position: fixed;
-  inset: 0;
-  bottom: var(--mobile-nav-height);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
   z-index: 60;
   background: #0f172a;
   flex-direction: column;

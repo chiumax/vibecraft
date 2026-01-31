@@ -133,8 +133,14 @@ function isOriginAllowed(origin: string | undefined): boolean {
       return true
     }
 
-    // Allow Tailscale network access
-    if (url.hostname === '100.64.130.41' || url.hostname === 'maxs-macbook-air.tail0eae52.ts.net') {
+    // Allow Tailscale CGNAT range (100.64.0.0/10)
+    const parts = url.hostname.split('.').map(Number)
+    if (parts.length === 4 && parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) {
+      return true
+    }
+
+    // Allow Tailscale MagicDNS hostnames
+    if (url.hostname.endsWith('.ts.net')) {
       return true
     }
 

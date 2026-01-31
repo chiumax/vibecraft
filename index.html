@@ -27,158 +27,400 @@
     <script>window.amplitude.init('3b78e993d3c7ddad9fb9ae615cc094b6', {"fetchRemoteConfig":true,"autocapture":{"attribution":true,"fileDownloads":true,"formInteractions":true,"pageViews":true,"sessions":true,"elementInteractions":true,"networkTracking":true,"webVitals":true,"frustrationInteractions":true}});</script>
   </head>
   <body>
-    <div id="app">
-      <!-- Left: 3D Scene -->
-      <div id="scene-panel">
-        <div id="canvas-container"></div>
+    <!-- ========================================================================
+         LAYOUT CONTAINER - Dynamic layout is rendered here
+         ======================================================================== -->
+    <div id="layout-container"></div>
 
-        <!-- Scene HUD -->
-        <div id="scene-hud">
-          <div class="scene-badge unified-hud">
-            <div id="status-dot"></div>
-            <span id="username" class="hud-user">...</span>
-            <span id="status-text"></span>
-            <span class="hud-sep">|</span>
-            <span id="token-counter" class="hud-tokens" title="Tokens used this session">⚡ 0 tok</span>
-            <span class="hud-sep">|</span>
-            <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
-            <!-- Debug: FPS counter (uncomment to enable)
-            <span class="hud-sep">|</span>
-            <span id="fps" class="hud-fps">-- FPS</span>
-            -->
-          </div>
-        </div>
+    <!-- ========================================================================
+         DESKTOP LAYOUT TEMPLATE (1024px+)
+         Side-by-side: 60% scene, 40% feed
+         ======================================================================== -->
+    <template id="layout-desktop">
+      <div id="app" class="desktop-layout">
+        <!-- Left: 3D Scene -->
+        <div id="scene-panel">
+          <div id="canvas-container"></div>
 
-        <!-- Dev Panel (animations test) - hidden by default -->
-        <div id="dev-panel" class="hidden">
-          <div class="dev-header">🎬 Animations</div>
-          <div id="dev-animations"></div>
-        </div>
-
-        <!-- Keybind Helper (bottom-left) -->
-        <div id="keybind-helper">
-          <div class="keybind-list">
-            <span class="keybind"><kbd>1-6</kbd> sessions · <kbd>`</kbd><kbd>0</kbd> overview · <kbd>D</kbd> draw</span>
-          </div>
-        </div>
-
-        <!-- Voice Control (center bottom) -->
-        <div id="voice-control" class="voice-control">
-          <!-- Idle state: mic button with hint -->
-          <div class="voice-idle">
-            <button type="button" id="voice-btn" class="voice-trigger" title="Start voice input">🎤</button>
-            <span class="voice-hint"><kbd>Ctrl</kbd><kbd>M</kbd></span>
-          </div>
-          <!-- Recording state: bars + dot -->
-          <div class="voice-recording">
-            <div class="voice-bars">
-              <div class="voice-bar" data-bar="0"></div>
-              <div class="voice-bar" data-bar="1"></div>
-              <div class="voice-bar" data-bar="2"></div>
-              <div class="voice-bar" data-bar="3"></div>
-              <div class="voice-bar" data-bar="4"></div>
-              <div class="voice-bar" data-bar="5"></div>
-              <div class="voice-bar" data-bar="6"></div>
-              <div class="voice-bar" data-bar="7"></div>
-              <div class="voice-bar" data-bar="8"></div>
-              <div class="voice-bar" data-bar="9"></div>
-            </div>
-            <div class="voice-status-row">
-              <div class="voice-record-dot"></div>
-              <span class="voice-send-hint"><kbd>Enter</kbd> to send</span>
+          <!-- Scene HUD -->
+          <div id="scene-hud">
+            <div class="scene-badge unified-hud">
+              <div id="status-dot"></div>
+              <span id="username" class="hud-user">...</span>
+              <span id="status-text"></span>
+              <span class="hud-sep">|</span>
+              <span id="token-counter" class="hud-tokens" title="Tokens used this session">⚡ 0 tok</span>
+              <span class="hud-sep">|</span>
+              <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
             </div>
           </div>
-        </div>
 
-        <!-- Draw Mode UI (bottom right of scene) -->
-        <div id="draw-indicator">
-          <span class="draw-mode-label">DRAW MODE</span>
-          <span class="draw-mode-hint"><kbd>D</kbd> exit · <kbd>X</kbd> clear · <kbd>Q</kbd><kbd>E</kbd> brush · <kbd>R</kbd> 3D</span>
-        </div>
-        <div id="draw-palette">
-          <!-- Populated by DrawMode.ts -->
-        </div>
-
-      </div>
-
-      <!-- Right: Activity Feed -->
-      <div id="feed-panel">
-        <div id="feed-header">
-          <h2>Vibecraft <span class="muted">(vibecraft.sh)</span></h2>
-          <div class="feed-header-right">
-            <span id="attention-badge" class="attention-badge hidden">0</span>
-            <button id="about-btn" class="feed-about-btn" title="About Vibecraft">?</button>
+          <!-- Dev Panel -->
+          <div id="dev-panel" class="hidden">
+            <div class="dev-header">🎬 Animations</div>
+            <div id="dev-animations"></div>
           </div>
+
+          <!-- Keybind Helper -->
+          <div id="keybind-helper">
+            <div class="keybind-list">
+              <span class="keybind"><kbd>1-6</kbd> sessions · <kbd>`</kbd><kbd>0</kbd> overview · <kbd>D</kbd> draw</span>
+            </div>
+          </div>
+
+          <!-- Voice Control -->
+          <div id="voice-control" class="voice-control">
+            <div class="voice-idle">
+              <button type="button" id="voice-btn" class="voice-trigger" title="Start voice input">🎤</button>
+              <span class="voice-hint"><kbd>Ctrl</kbd><kbd>M</kbd></span>
+            </div>
+            <div class="voice-recording">
+              <div class="voice-bars">
+                <div class="voice-bar" data-bar="0"></div>
+                <div class="voice-bar" data-bar="1"></div>
+                <div class="voice-bar" data-bar="2"></div>
+                <div class="voice-bar" data-bar="3"></div>
+                <div class="voice-bar" data-bar="4"></div>
+                <div class="voice-bar" data-bar="5"></div>
+                <div class="voice-bar" data-bar="6"></div>
+                <div class="voice-bar" data-bar="7"></div>
+                <div class="voice-bar" data-bar="8"></div>
+                <div class="voice-bar" data-bar="9"></div>
+              </div>
+              <div class="voice-status-row">
+                <div class="voice-record-dot"></div>
+                <span class="voice-send-hint"><kbd>Enter</kbd> to send</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Draw Mode UI -->
+          <div id="draw-indicator">
+            <span class="draw-mode-label">DRAW MODE</span>
+            <span class="draw-mode-hint"><kbd>D</kbd> exit · <kbd>X</kbd> clear · <kbd>Q</kbd><kbd>E</kbd> brush · <kbd>R</kbd> 3D</span>
+          </div>
+          <div id="draw-palette"></div>
         </div>
 
-        <!-- Session Management with Tabs -->
-        <div id="sessions-panel">
-          <div id="sessions-tabs">
-            <button class="sessions-tab active" data-tab="sessions">Sessions</button>
-            <button class="sessions-tab" data-tab="shell">Shell</button>
+        <!-- Right: Activity Feed -->
+        <div id="feed-panel">
+          <div id="feed-header">
+            <h2>Vibecraft <span class="muted">(vibecraft.sh)</span></h2>
+            <div class="feed-header-right">
+              <span id="attention-badge" class="attention-badge hidden">0</span>
+              <button id="about-btn" class="feed-about-btn" title="About Vibecraft">?</button>
+            </div>
           </div>
-          <div id="sessions-content">
-            <div id="sessions-list" class="tab-content active">
-              <div id="managed-sessions"></div>
-              <!-- Terminal panel (inside sessions tab) -->
-              <div id="terminal-panel" class="hidden">
-                <div class="terminal-header">
-                  <div class="terminal-header-left">
-                    <div class="terminal-indicator"></div>
-                    <span class="terminal-title" id="terminal-session-name">Terminal</span>
+
+          <!-- Session Management with Tabs -->
+          <div id="sessions-panel">
+            <div id="sessions-tabs">
+              <button class="sessions-tab active" data-tab="sessions">Sessions</button>
+              <button class="sessions-tab" data-tab="shell">Shell</button>
+            </div>
+            <div id="sessions-content">
+              <div id="sessions-list" class="tab-content active">
+                <div id="managed-sessions"></div>
+                <!-- Terminal panel (inside sessions tab) -->
+                <div id="terminal-panel" class="hidden">
+                  <div class="terminal-header">
+                    <div class="terminal-header-left">
+                      <div class="terminal-indicator"></div>
+                      <span class="terminal-title" id="terminal-session-name">Terminal</span>
+                    </div>
+                    <div class="terminal-controls">
+                      <button class="terminal-btn" id="terminal-expand" title="Expand">⤢</button>
+                    </div>
                   </div>
-                  <div class="terminal-controls">
-                    <button class="terminal-btn" id="terminal-expand" title="Expand">⤢</button>
-                  </div>
+                  <div id="terminal-output"></div>
                 </div>
-                <div id="terminal-output"></div>
               </div>
-            </div>
-            <div id="shell-tab-content" class="tab-content">
-              <div id="shell-tabs-bar">
-                <div id="shell-tabs"></div>
-                <button id="new-shell-btn" title="New Shell">+</button>
+              <div id="shell-tab-content" class="tab-content">
+                <div id="shell-tabs-bar">
+                  <div id="shell-tabs"></div>
+                  <button id="new-shell-btn" title="New Shell">+</button>
+                </div>
+                <div id="shell-terminals"></div>
               </div>
-              <div id="shell-terminals"></div>
             </div>
           </div>
         </div>
       </div>
+    </template>
 
-      <!-- Shell Terminal Panel (standalone shell access) -->
-      <div id="shell-panel" class="hidden">
-        <div class="terminal-header">
-          <div class="terminal-header-left">
-            <div class="terminal-indicator"></div>
-            <span class="terminal-title">Shell</span>
+    <!-- ========================================================================
+         TABLET LAYOUT TEMPLATE (768px - 1023px)
+         Full-screen panels with mobile nav, larger touch targets
+         ======================================================================== -->
+    <template id="layout-tablet">
+      <div id="app" class="tablet-layout">
+        <!-- 3D Scene (hidden by default, shown via nav) -->
+        <div id="scene-panel" class="panel-hidden">
+          <div id="canvas-container"></div>
+
+          <!-- Scene HUD -->
+          <div id="scene-hud">
+            <div class="scene-badge unified-hud">
+              <div id="status-dot"></div>
+              <span id="username" class="hud-user">...</span>
+              <span id="status-text"></span>
+              <span class="hud-sep">|</span>
+              <span id="token-counter" class="hud-tokens" title="Tokens used this session">⚡ 0 tok</span>
+              <span class="hud-sep">|</span>
+              <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
+            </div>
           </div>
-          <div class="terminal-controls">
-            <button class="terminal-btn" id="shell-clear" title="Clear">⌫</button>
+
+          <!-- Dev Panel -->
+          <div id="dev-panel" class="hidden">
+            <div class="dev-header">🎬 Animations</div>
+            <div id="dev-animations"></div>
+          </div>
+
+          <!-- Voice Control -->
+          <div id="voice-control" class="voice-control">
+            <div class="voice-idle">
+              <button type="button" id="voice-btn" class="voice-trigger" title="Start voice input">🎤</button>
+            </div>
+            <div class="voice-recording">
+              <div class="voice-bars">
+                <div class="voice-bar" data-bar="0"></div>
+                <div class="voice-bar" data-bar="1"></div>
+                <div class="voice-bar" data-bar="2"></div>
+                <div class="voice-bar" data-bar="3"></div>
+                <div class="voice-bar" data-bar="4"></div>
+                <div class="voice-bar" data-bar="5"></div>
+                <div class="voice-bar" data-bar="6"></div>
+                <div class="voice-bar" data-bar="7"></div>
+                <div class="voice-bar" data-bar="8"></div>
+                <div class="voice-bar" data-bar="9"></div>
+              </div>
+              <div class="voice-status-row">
+                <div class="voice-record-dot"></div>
+                <span class="voice-send-hint"><kbd>Enter</kbd> to send</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Draw Mode UI -->
+          <div id="draw-indicator">
+            <span class="draw-mode-label">DRAW MODE</span>
+            <span class="draw-mode-hint">Tap to draw</span>
+          </div>
+          <div id="draw-palette"></div>
+        </div>
+
+        <!-- Feed Panel (visible by default) -->
+        <div id="feed-panel" class="panel-visible">
+          <div id="feed-header">
+            <h2>Vibecraft</h2>
+            <div class="feed-header-right">
+              <span id="attention-badge" class="attention-badge hidden">0</span>
+              <button id="about-btn" class="feed-about-btn" title="About Vibecraft">?</button>
+            </div>
+          </div>
+
+          <!-- Session Management with Tabs -->
+          <div id="sessions-panel">
+            <div id="sessions-tabs">
+              <button class="sessions-tab active" data-tab="sessions">Sessions</button>
+              <button class="sessions-tab" data-tab="shell">Shell</button>
+            </div>
+            <div id="sessions-content">
+              <div id="sessions-list" class="tab-content active">
+                <div id="managed-sessions"></div>
+              </div>
+              <div id="shell-tab-content" class="tab-content">
+                <div id="shell-tabs-bar">
+                  <div id="shell-tabs"></div>
+                  <button id="new-shell-btn" title="New Shell">+</button>
+                </div>
+                <div id="shell-terminals"></div>
+              </div>
+            </div>
           </div>
         </div>
-        <div id="shell-output"></div>
-      </div>
 
-      <!-- Mobile Navigation Bar -->
-      <nav id="mobile-nav">
-        <button id="nav-feed" class="mobile-nav-btn active" data-view="feed">
-          <span class="nav-icon">📋</span>
-          <span class="nav-label">Feed</span>
-        </button>
-        <button id="nav-scene" class="mobile-nav-btn" data-view="scene">
-          <span class="nav-icon">🎮</span>
-          <span class="nav-label">Workshop</span>
-        </button>
-        <button id="nav-terminal" class="mobile-nav-btn" data-view="terminal">
-          <span class="nav-icon">⌨️</span>
-          <span class="nav-label">Terminal</span>
-        </button>
-        <button id="nav-shell" class="mobile-nav-btn" data-view="shell">
-          <span class="nav-icon">💻</span>
-          <span class="nav-label">Shell</span>
-        </button>
-      </nav>
-    </div>
+        <!-- Terminal Panel (fullscreen overlay) -->
+        <div id="terminal-panel" class="panel-hidden">
+          <div class="terminal-header">
+            <div class="terminal-header-left">
+              <div class="terminal-indicator"></div>
+              <span class="terminal-title" id="terminal-session-name">Terminal</span>
+            </div>
+            <div class="terminal-controls">
+              <button class="terminal-btn" id="terminal-expand" title="Expand">⤢</button>
+            </div>
+          </div>
+          <div id="terminal-output"></div>
+        </div>
+
+        <!-- Shell Panel (fullscreen overlay) -->
+        <div id="shell-panel" class="panel-hidden">
+          <div class="terminal-header">
+            <div class="terminal-header-left">
+              <div class="terminal-indicator"></div>
+              <span class="terminal-title">Shell</span>
+            </div>
+            <div class="terminal-controls">
+              <button class="terminal-btn" id="shell-clear" title="Clear">⌫</button>
+            </div>
+          </div>
+          <div id="shell-output"></div>
+        </div>
+
+        <!-- Mobile Navigation Bar -->
+        <nav id="mobile-nav">
+          <button id="nav-feed" class="mobile-nav-btn active" data-view="feed">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Feed</span>
+          </button>
+          <button id="nav-scene" class="mobile-nav-btn" data-view="scene">
+            <span class="nav-icon">🎮</span>
+            <span class="nav-label">Workshop</span>
+          </button>
+          <button id="nav-terminal" class="mobile-nav-btn" data-view="terminal">
+            <span class="nav-icon">⌨️</span>
+            <span class="nav-label">Terminal</span>
+          </button>
+          <button id="nav-shell" class="mobile-nav-btn" data-view="shell">
+            <span class="nav-icon">💻</span>
+            <span class="nav-label">Shell</span>
+          </button>
+        </nav>
+      </div>
+    </template>
+
+    <!-- ========================================================================
+         MOBILE LAYOUT TEMPLATE (320px - 767px)
+         Single column, feed-first, bottom sheet modals
+         ======================================================================== -->
+    <template id="layout-mobile">
+      <div id="app" class="mobile-layout">
+        <!-- 3D Scene (hidden by default, shown via nav) -->
+        <div id="scene-panel" class="panel-hidden">
+          <div id="canvas-container"></div>
+
+          <!-- Minimal Scene HUD -->
+          <div id="scene-hud">
+            <div class="scene-badge unified-hud">
+              <div id="status-dot"></div>
+              <span id="username" class="hud-user">...</span>
+              <span class="hud-sep">|</span>
+              <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
+            </div>
+          </div>
+
+          <!-- Dev Panel -->
+          <div id="dev-panel" class="hidden">
+            <div class="dev-header">🎬 Animations</div>
+            <div id="dev-animations"></div>
+          </div>
+
+          <!-- Voice Control (simplified) -->
+          <div id="voice-control" class="voice-control">
+            <div class="voice-idle">
+              <button type="button" id="voice-btn" class="voice-trigger" title="Start voice input">🎤</button>
+            </div>
+            <div class="voice-recording">
+              <div class="voice-bars">
+                <div class="voice-bar" data-bar="0"></div>
+                <div class="voice-bar" data-bar="1"></div>
+                <div class="voice-bar" data-bar="2"></div>
+                <div class="voice-bar" data-bar="3"></div>
+                <div class="voice-bar" data-bar="4"></div>
+              </div>
+              <div class="voice-status-row">
+                <div class="voice-record-dot"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Draw Mode UI (centered) -->
+          <div id="draw-indicator">
+            <span class="draw-mode-label">DRAW</span>
+          </div>
+          <div id="draw-palette"></div>
+        </div>
+
+        <!-- Feed Panel (visible by default) -->
+        <div id="feed-panel" class="panel-visible">
+          <div id="feed-header">
+            <h2>Vibecraft</h2>
+            <div class="feed-header-right">
+              <span id="attention-badge" class="attention-badge hidden">0</span>
+              <button id="about-btn" class="feed-about-btn" title="About">?</button>
+            </div>
+          </div>
+
+          <!-- Compact Session Management -->
+          <div id="sessions-panel">
+            <div id="sessions-tabs">
+              <button class="sessions-tab active" data-tab="sessions">Sessions</button>
+              <button class="sessions-tab" data-tab="shell">Shell</button>
+            </div>
+            <div id="sessions-content">
+              <div id="sessions-list" class="tab-content active">
+                <div id="managed-sessions"></div>
+              </div>
+              <div id="shell-tab-content" class="tab-content">
+                <div id="shell-tabs-bar">
+                  <div id="shell-tabs"></div>
+                  <button id="new-shell-btn" title="New Shell">+</button>
+                </div>
+                <div id="shell-terminals"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Panel (fullscreen overlay) -->
+        <div id="terminal-panel" class="panel-hidden">
+          <div class="terminal-header">
+            <div class="terminal-header-left">
+              <div class="terminal-indicator"></div>
+              <span class="terminal-title" id="terminal-session-name">Terminal</span>
+            </div>
+          </div>
+          <div id="terminal-output"></div>
+        </div>
+
+        <!-- Shell Panel (fullscreen overlay) -->
+        <div id="shell-panel" class="panel-hidden">
+          <div class="terminal-header">
+            <div class="terminal-header-left">
+              <div class="terminal-indicator"></div>
+              <span class="terminal-title">Shell</span>
+            </div>
+          </div>
+          <div id="shell-output"></div>
+        </div>
+
+        <!-- Mobile Navigation Bar -->
+        <nav id="mobile-nav">
+          <button id="nav-feed" class="mobile-nav-btn active" data-view="feed">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Feed</span>
+          </button>
+          <button id="nav-scene" class="mobile-nav-btn" data-view="scene">
+            <span class="nav-icon">🎮</span>
+            <span class="nav-label">Scene</span>
+          </button>
+          <button id="nav-terminal" class="mobile-nav-btn" data-view="terminal">
+            <span class="nav-icon">⌨️</span>
+            <span class="nav-label">Term</span>
+          </button>
+          <button id="nav-shell" class="mobile-nav-btn" data-view="shell">
+            <span class="nav-icon">💻</span>
+            <span class="nav-label">Shell</span>
+          </button>
+        </nav>
+      </div>
+    </template>
+
+    <!-- ========================================================================
+         SHARED MODALS (persist across layout changes)
+         ======================================================================== -->
 
     <!-- New Session Modal -->
     <div id="new-session-modal">
@@ -447,7 +689,7 @@
       </div>
     </div>
 
-    <!-- Zone Timeout Modal (shown when zone creation takes too long) -->
+    <!-- Zone Timeout Modal -->
     <div id="zone-timeout-modal">
       <div class="modal-content zone-timeout-content">
         <div class="modal-header">
@@ -470,7 +712,11 @@
       </div>
     </div>
 
-    <!-- Offline Banner (shown when user tries to interact while disconnected) -->
+    <!-- ========================================================================
+         SHARED OVERLAYS (persist across layout changes)
+         ======================================================================== -->
+
+    <!-- Offline Banner -->
     <div id="offline-banner" class="offline-banner hidden">
       <span>Not connected to local server</span>
       <button id="offline-banner-dismiss">×</button>

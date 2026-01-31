@@ -1,0 +1,143 @@
+/* ============================================================================
+   TABLET LAYOUT STYLES (768px - 1023px)
+   ============================================================================
+   Full-screen panels with mobile nav, larger touch targets
+   ============================================================================ */
+
+/* Tablet layout container */
+.tablet-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
+}
+
+/* Panel states */
+.tablet-layout .panel-hidden {
+  display: none !important;
+}
+
+.tablet-layout .panel-visible {
+  display: flex !important;
+  flex-direction: column;
+}
+
+/* Scene panel - fullscreen when visible */
+.tablet-layout #scene-panel {
+  position: fixed;
+  inset: 0;
+  bottom: var(--mobile-nav-height);
+  z-index: 50;
+  background: #0a0a0f;
+}
+
+.tablet-layout #scene-panel.panel-visible {
+  display: block !important;
+}
+
+/* Feed panel - fullscreen */
+.tablet-layout #feed-panel {
+  flex: 1;
+  padding-bottom: var(--mobile-nav-height);
+  background: #111;
+  overflow: hidden;
+}
+
+/* Terminal panel - fullscreen overlay */
+.tablet-layout #terminal-panel {
+  position: fixed;
+  inset: 0;
+  bottom: var(--mobile-nav-height);
+  z-index: 60;
+  background: #0f172a;
+  border: none;
+}
+
+/* Shell panel - fullscreen overlay */
+.tablet-layout #shell-panel {
+  position: fixed;
+  inset: 0;
+  bottom: var(--mobile-nav-height);
+  z-index: 60;
+  background: #0f172a;
+  flex-direction: column;
+}
+
+/* Mobile navigation - visible */
+.tablet-layout #mobile-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+/* Larger touch targets for tablet */
+.tablet-layout .mobile-nav-btn {
+  padding: 10px 24px;
+  min-width: 80px;
+}
+
+.tablet-layout .mobile-nav-btn .nav-icon {
+  font-size: 22px;
+}
+
+.tablet-layout .mobile-nav-btn .nav-label {
+  font-size: 11px;
+}
+
+/* Sessions grid - 2 columns */
+.tablet-layout #managed-sessions {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tablet-layout .session-item {
+  min-height: 52px;
+}
+
+/* HUD adjustments */
+.tablet-layout #keybind-helper {
+  display: none;
+}
+
+.tablet-layout .hud-btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 8px;
+}
+
+.tablet-layout #timeline-container {
+  bottom: calc(var(--mobile-nav-height) + 12px);
+}
+
+.tablet-layout .voice-control {
+  bottom: calc(var(--mobile-nav-height) + 80px);
+}
+
+.tablet-layout #draw-palette {
+  bottom: calc(var(--mobile-nav-height) + 12px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.tablet-layout .draw-color-btn,
+.tablet-layout .draw-eraser-btn,
+.tablet-layout .draw-clear-btn,
+.tablet-layout .draw-3d-toggle {
+  width: 48px;
+  height: 48px;
+}
+
+.tablet-layout #toast-container {
+  bottom: calc(var(--mobile-nav-height) + 20px);
+}
+
+/* Terminal button sizing */
+.tablet-layout .terminal-header {
+  padding: 8px var(--mobile-padding);
+}
+
+.tablet-layout .terminal-btn {
+  min-width: var(--touch-target-min);
+  min-height: 36px;
+  padding: 6px 12px;
+}

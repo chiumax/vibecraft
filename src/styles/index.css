@@ -1,5 +1,6 @@
 /* Main CSS entry point - imports all style modules */
 
+/* Base styles */
 @import './base.css';
 @import './sessions.css';
 @import './feed.css';
@@ -7,4 +8,9 @@
 @import './hud.css';
 @import './modals.css';
 @import './terminal.css';
-@import './responsive.css'; /* Must be last for mobile overrides */
+
+/* Responsive layouts - order matters: shared, desktop, tablet, mobile */
+@import './responsive.css'; /* Shared variables and mobile nav base */
+@import './desktop.css';    /* Desktop layout (1024px+) */
+@import './tablet.css';     /* Tablet layout (768px - 1023px) */
+@import './mobile.css';     /* Mobile layout (320px - 767px) */

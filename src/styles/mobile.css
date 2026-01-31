@@ -1,0 +1,335 @@
+/* ============================================================================
+   MOBILE LAYOUT STYLES (320px - 767px)
+   ============================================================================
+   Single column, feed-first, bottom sheet modals
+   ============================================================================ */
+
+/* Mobile layout container */
+.mobile-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
+}
+
+/* Panel states */
+.mobile-layout .panel-hidden {
+  display: none !important;
+}
+
+.mobile-layout .panel-visible {
+  display: flex !important;
+  flex-direction: column;
+}
+
+/* Scene panel - fullscreen when visible */
+.mobile-layout #scene-panel {
+  position: fixed;
+  inset: 0;
+  bottom: var(--mobile-nav-height);
+  z-index: 50;
+  background: #0a0a0f;
+}
+
+.mobile-layout #scene-panel.panel-visible {
+  display: block !important;
+}
+
+/* Feed panel - fullscreen */
+.mobile-layout #feed-panel {
+  flex: 1;
+  padding-bottom: var(--mobile-nav-height);
+  background: #111;
+  overflow: hidden;
+}
+
+/* Terminal panel - fullscreen overlay */
+.mobile-layout #terminal-panel {
+  position: fixed;
+  inset: 0;
+  bottom: var(--mobile-nav-height);
+  z-index: 60;
+  background: #0f172a;
+  border: none;
+}
+
+/* Shell panel - fullscreen overlay */
+.mobile-layout #shell-panel {
+  position: fixed;
+  inset: 0;
+  bottom: var(--mobile-nav-height);
+  z-index: 60;
+  background: #0f172a;
+  flex-direction: column;
+}
+
+/* Mobile navigation - visible */
+.mobile-layout #mobile-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+/* Sessions grid - single column */
+.mobile-layout #managed-sessions {
+  grid-template-columns: 1fr;
+}
+
+.mobile-layout .session-item {
+  min-height: 56px;
+  padding: 12px;
+}
+
+/* Always visible actions on touch */
+.mobile-layout .session-item .session-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-layout .session-item .session-actions button {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+}
+
+.mobile-layout #sessions-panel {
+  padding: 8px;
+}
+
+.mobile-layout #sessions-list {
+  padding: 0 4px 8px;
+  max-height: 200px;
+}
+
+/* HUD adjustments */
+.mobile-layout #keybind-helper {
+  display: none;
+}
+
+.mobile-layout .hud-btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 8px;
+}
+
+.mobile-layout #timeline-container {
+  bottom: calc(var(--mobile-nav-height) + 12px);
+}
+
+.mobile-layout .voice-control {
+  bottom: calc(var(--mobile-nav-height) + 80px);
+}
+
+.mobile-layout #draw-palette {
+  bottom: calc(var(--mobile-nav-height) + 12px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.mobile-layout .draw-color-btn,
+.mobile-layout .draw-eraser-btn,
+.mobile-layout .draw-clear-btn,
+.mobile-layout .draw-3d-toggle {
+  width: 48px;
+  height: 48px;
+}
+
+.mobile-layout #toast-container {
+  bottom: calc(var(--mobile-nav-height) + 20px);
+}
+
+/* Feed header */
+.mobile-layout #feed-header {
+  padding: var(--mobile-padding);
+}
+
+.mobile-layout #feed-header h2 {
+  font-size: 16px;
+}
+
+.mobile-layout .feed-about-btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+}
+
+/* Terminal button sizing */
+.mobile-layout .terminal-header {
+  padding: 8px var(--mobile-padding);
+}
+
+.mobile-layout .terminal-btn {
+  min-width: var(--touch-target-min);
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
+/* Modals - bottom sheet */
+.mobile-layout #new-session-modal .modal-content,
+.mobile-layout #settings-modal .modal-content,
+.mobile-layout #about-modal .modal-content,
+.mobile-layout #question-modal .modal-content,
+.mobile-layout #permission-modal .modal-content,
+.mobile-layout #zone-info-modal .modal-content,
+.mobile-layout #text-label-modal .modal-content,
+.mobile-layout #zone-timeout-modal .modal-content {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 90dvh;
+  border-radius: 16px 16px 0 0;
+  transform: translateY(0);
+  animation: modal-slide-up 0.3s ease-out;
+  overflow-y: auto;
+}
+
+@keyframes modal-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.mobile-layout #new-session-modal,
+.mobile-layout #settings-modal,
+.mobile-layout #about-modal,
+.mobile-layout #question-modal,
+.mobile-layout #permission-modal,
+.mobile-layout #zone-info-modal,
+.mobile-layout #text-label-modal,
+.mobile-layout #zone-timeout-modal {
+  align-items: flex-end;
+}
+
+/* Prevent iOS zoom on input focus */
+.mobile-layout .modal-field input,
+.mobile-layout .modal-field textarea,
+.mobile-layout .question-other textarea,
+.mobile-layout .text-label-textarea,
+.mobile-layout .zone-command-input {
+  font-size: 16px;
+}
+
+.mobile-layout .modal-checkbox {
+  min-height: var(--touch-target-min);
+  padding: 12px;
+}
+
+.mobile-layout .modal-btn {
+  min-height: var(--touch-target-min);
+  font-size: 15px;
+}
+
+.mobile-layout .modal-actions {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Context menu */
+.mobile-layout .context-menu {
+  position: fixed;
+  bottom: calc(var(--mobile-nav-height) + 16px);
+  left: 16px;
+  right: 16px;
+  top: auto;
+  transform: none;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.mobile-layout .context-menu-item {
+  min-height: var(--touch-target-min);
+  padding: 12px;
+}
+
+/* Zone command modal */
+.mobile-layout .zone-command-content {
+  position: fixed;
+  bottom: calc(var(--mobile-nav-height) + 16px);
+  left: 16px;
+  right: 16px;
+  width: auto;
+}
+
+.mobile-layout .zone-command-input {
+  font-size: 16px;
+  min-height: 48px;
+}
+
+.mobile-layout .zone-command-send {
+  width: 48px;
+  height: 48px;
+}
+
+/* Attention badge */
+.mobile-layout .attention-badge {
+  min-width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+/* Not connected overlay */
+.mobile-layout .not-connected-content {
+  padding: 24px;
+}
+
+.mobile-layout .not-connected-content h2 {
+  font-size: 20px;
+}
+
+.mobile-layout .not-connected-code {
+  font-size: 13px;
+  padding: 12px 16px;
+}
+
+.mobile-layout .not-connected-actions {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-layout .not-connected-btn {
+  width: 100%;
+  min-height: var(--touch-target-min);
+}
+
+/* Offline banner */
+.mobile-layout .offline-banner {
+  left: 16px;
+  right: 16px;
+  transform: none;
+  border-radius: 8px;
+}
+
+/* Prompt input */
+.mobile-layout #prompt-container {
+  position: fixed;
+  bottom: var(--mobile-nav-height);
+  left: 0;
+  right: 0;
+  padding: var(--mobile-padding);
+  padding-bottom: calc(var(--mobile-padding) + env(safe-area-inset-bottom));
+  background: rgba(17, 17, 17, 0.98);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 100;
+}
+
+.mobile-layout #prompt-input {
+  font-size: 16px;
+  min-height: 48px;
+  padding: 14px 16px;
+}
+
+.mobile-layout #prompt-submit,
+.mobile-layout #prompt-cancel {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 10px 16px;
+}
+
+.mobile-layout #voice-transcript {
+  left: var(--mobile-padding);
+  right: var(--mobile-padding);
+  bottom: 100%;
+  margin-bottom: 4px;
+}

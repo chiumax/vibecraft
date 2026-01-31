@@ -61,7 +61,7 @@ import { drawMode } from './ui/DrawMode'
 import { setupTextLabelModal, showTextLabelModal } from './ui/TextLabelModal'
 import { createSessionAPI, type SessionAPI } from './api'
 import { TerminalManager, TerminalUI } from './ui/Terminal'
-import { setupMobileLayout, getMobileLayoutManager } from './ui/MobileLayoutManager'
+import { initLayoutManager, getLayoutManager, type LayoutType } from './ui/LayoutManager'
 
 // ============================================================================
 // Configuration
@@ -2740,6 +2740,40 @@ function hideNotConnectedOverlay(): void {
 // ============================================================================
 
 function init() {
+  // Initialize layout manager FIRST - this renders the HTML template
+  // Must happen before any DOM queries for elements inside the layout
+  const layoutManager = initLayoutManager({
+    onViewChange: (view) => {
+      console.log('Mobile view changed to:', view)
+      // Trigger resize when switching to scene view to ensure canvas is sized correctly
+      if (view === 'scene' && state.scene) {
+        window.dispatchEvent(new Event('resize'))
+      }
+      // Handle shell view - create shell if needed, fit terminal
+      if (view === 'shell') {
+        if (state.shells.size === 0) {
+          createShell()
+        } else if (state.activeShellId) {
+          requestAnimationFrame(() => {
+            const terminal = state.shells.get(state.activeShellId!)
+            terminal?.fit()
+            terminal?.focus()
+          })
+        }
+      }
+    },
+    onLayoutChange: (layout, previousLayout) => {
+      console.log('Layout changed:', previousLayout, '->', layout)
+      // Re-initialize components that depend on DOM structure after layout swap
+      if (state.scene) {
+        window.dispatchEvent(new Event('resize'))
+      }
+    },
+  })
+
+  // Initialize the layout (renders the appropriate template into the DOM)
+  layoutManager.init()
+
   const container = document.getElementById('canvas-container')
   if (!container) {
     console.error('Canvas container not found')
@@ -3245,32 +3279,6 @@ function init() {
 
   // Check for updates (non-blocking)
   checkForUpdates()
-
-  // Setup mobile layout manager
-  setupMobileLayout({
-    onViewChange: (view) => {
-      console.log('Mobile view changed to:', view)
-      // Trigger resize when switching to scene view to ensure canvas is sized correctly
-      if (view === 'scene' && state.scene) {
-        window.dispatchEvent(new Event('resize'))
-      }
-      // Handle shell view - create shell if needed, fit terminal
-      if (view === 'shell') {
-        if (state.shells.size === 0) {
-          createShell()
-        } else if (state.activeShellId) {
-          requestAnimationFrame(() => {
-            const terminal = state.shells.get(state.activeShellId!)
-            terminal?.fit()
-            terminal?.focus()
-          })
-        }
-      }
-    },
-    onMobileChange: (isMobile) => {
-      console.log('Mobile mode:', isMobile)
-    },
-  })
 
   console.log('Vibecraft initialized (multi-session enabled)')
 }

@@ -87,11 +87,11 @@ const AGENT_PORT = getAgentPort()
 // In prod (hosted), connect to localhost where user's agent runs
 const WS_URL = import.meta.env.DEV
   ? `ws://${window.location.host}/ws`
-  : `ws://localhost:${AGENT_PORT}`
+  : `ws://${window.location.hostname}:${AGENT_PORT}`
 
 const API_URL = import.meta.env.DEV
   ? '/api'
-  : `http://localhost:${AGENT_PORT}`
+  : `http://${window.location.hostname}:${AGENT_PORT}`
 
 // Create session API instance
 const sessionAPI = createSessionAPI(API_URL)

@@ -133,6 +133,16 @@ function isOriginAllowed(origin: string | undefined): boolean {
       return true
     }
 
+    // Allow Tailscale network access
+    if (url.hostname === '100.64.130.41' || url.hostname === 'maxs-macbook-air.tail0eae52.ts.net') {
+      return true
+    }
+
+    // Allow local network access
+    if (url.hostname === '192.168.1.58') {
+      return true
+    }
+
     // Production: exact hostname match with HTTPS required
     if (url.hostname === 'vibecraft.sh' && url.protocol === 'https:') {
       return true

@@ -140,6 +140,56 @@
   overflow-y: auto;
 }
 
+/* Shell tab content - fill available space */
+.mobile-layout #shell-tab-content {
+  flex: 1;
+  min-height: 0;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mobile-layout #shell-tab-content.active {
+  display: flex !important;
+}
+
+.mobile-layout #shell-tabs-bar {
+  flex-shrink: 0;
+}
+
+.mobile-layout #shell-terminals {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-layout .shell-terminal {
+  position: absolute;
+  inset: 0;
+}
+
+.mobile-layout .shell-terminal .terminal-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.mobile-layout .shell-terminal .xterm {
+  height: 100% !important;
+}
+
+/* Todos tab content - fill available space */
+.mobile-layout #todos-tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mobile-layout #todos-tab-content.active {
+  display: flex !important;
+  flex-direction: column;
+}
+
 /* HUD adjustments */
 .mobile-layout #keybind-helper {
   display: none;

@@ -4,6 +4,234 @@
 #sessions-panel {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When shell tab is active (non-stacked), panel expands */
+#sessions-panel:has(#shell-tab-content.active):not(.stacked-shell) {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Sessions Tabs */
+#sessions-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sessions-tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sessions-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sessions-tab.active {
+  color: #22d3ee;
+  border-bottom-color: #22d3ee;
+}
+
+/* Tab content */
+#sessions-content {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When shell is active or terminal is visible, content expands */
+#sessions-panel:has(#shell-tab-content.active):not(.stacked-shell) #sessions-content,
+#sessions-panel:has(#terminal-panel:not(.hidden)) #sessions-content {
+  flex: 1;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Sessions list tab */
+#sessions-list.tab-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* When terminal is visible inside sessions tab, expand the panel */
+#sessions-panel:has(#terminal-panel:not(.hidden)) {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Shell tab content */
+#shell-tab-content {
+  background: #0f172a;
+  display: none;
+  flex: 1;
+  min-height: 200px;
+}
+
+#shell-tab-content.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Stacked mode: show both sessions and shell */
+#sessions-panel.stacked-shell #sessions-list.tab-content,
+#sessions-panel.stacked-shell #shell-tab-content {
+  display: flex;
+  flex-direction: column;
+}
+
+#sessions-panel.stacked-shell #sessions-list.tab-content {
+  max-height: 200px;
+  flex: 0 0 auto;
+}
+
+#sessions-panel.stacked-shell #shell-tab-content {
+  flex: 1;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Full-screen shell mode (default): hide sessions when shell active */
+#sessions-panel:not(.stacked-shell) #sessions-list.tab-content:not(.active) {
+  display: none;
+}
+
+#sessions-panel:not(.stacked-shell) #shell-tab-content.active {
+  flex: 1;
+}
+
+/* Shell tabs bar */
+#shell-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+#shell-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.shell-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.shell-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.shell-tab.active {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: rgba(34, 211, 238, 0.3);
+  color: #22d3ee;
+}
+
+.shell-tab .close-btn {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-tab .close-btn:hover {
+  background: rgba(248, 113, 113, 0.3);
+  color: #f87171;
+}
+
+#new-shell-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+#new-shell-btn:hover {
+  background: rgba(74, 222, 128, 0.25);
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
+/* Shell terminals container */
+#shell-terminals {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.shell-terminal {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.shell-terminal.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-terminal .terminal-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.shell-terminal .xterm {
+  height: 100%;
+  padding: 8px;
 }
 
 .attention-badge {
@@ -54,14 +282,22 @@
   flex-direction: column;
   gap: 2px;
   padding: 0 8px 8px;
-  max-height: 250px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 #managed-sessions {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* Terminal panel inside sessions list takes remaining space */
+#sessions-list #terminal-panel {
+  flex: 1;
+  min-height: 150px;
 }
 
 /* Unified session item style - compact card layout */

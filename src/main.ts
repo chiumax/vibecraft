@@ -60,7 +60,8 @@ import { checkForUpdates } from './ui/VersionChecker'
 import { drawMode } from './ui/DrawMode'
 import { setupTextLabelModal, showTextLabelModal } from './ui/TextLabelModal'
 import { createSessionAPI, type SessionAPI } from './api'
-import { TerminalManager } from './ui/Terminal'
+import { TerminalManager, TerminalUI } from './ui/Terminal'
+import { setupMobileLayout, getMobileLayoutManager } from './ui/MobileLayoutManager'
 
 // ============================================================================
 // Configuration
@@ -125,6 +126,9 @@ interface AppState {
   attentionSystem: AttentionSystem | null  // Manages attention queue and notifications
   timelineManager: TimelineManager | null  // Manages icon timeline
   terminalManager: TerminalManager | null  // Manages PTY terminal sessions
+  shells: Map<string, TerminalUI>  // Multiple standalone shell terminals
+  activeShellId: string | null  // Currently active shell ID
+  shellCounter: number  // Counter for generating shell IDs
   soundEnabled: boolean  // Whether to play sounds
   hasAutoOverviewed: boolean  // Whether we've done initial auto-overview for 2+ sessions
   userChangedCamera: boolean  // Whether user has manually changed camera (to avoid overriding)
@@ -144,6 +148,9 @@ const state: AppState = {
   attentionSystem: null,  // Initialized in init()
   timelineManager: null,  // Initialized in init()
   terminalManager: null,  // Initialized in init()
+  shells: new Map(),  // Shell terminals
+  activeShellId: null,
+  shellCounter: 0,
   soundEnabled: true,
   hasAutoOverviewed: false,
   userChangedCamera: false,
@@ -953,13 +960,28 @@ function setupClickToPrompt(): void {
     }
   }
 
-  // Helper to convert mouse event to normalized coordinates and raycast
-  const raycastFromMouse = (event: MouseEvent) => {
+  // Helper to convert pointer event to normalized coordinates and raycast
+  const raycastFromPointer = (event: PointerEvent | MouseEvent) => {
     const rect = state.scene!.renderer.domElement.getBoundingClientRect()
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
     raycaster.setFromCamera(mouse, state.scene!.camera)
   }
+
+  // Long-press support for touch context menu
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null
+  let longPressTriggered = false
+  const LONG_PRESS_DURATION = 500 // ms
+
+  const clearLongPress = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      longPressTimer = null
+    }
+  }
+
+  // Disable touch scrolling/zooming on canvas for proper touch handling
+  state.scene.renderer.domElement.style.touchAction = 'none'
 
   // Helper to find which zone was clicked (returns sessionId or null)
   const findClickedZone = (): string | null => {
@@ -975,8 +997,35 @@ function setupClickToPrompt(): void {
     return null
   }
 
-  state.scene.renderer.domElement.addEventListener('mousedown', (event) => {
+  state.scene.renderer.domElement.addEventListener('pointerdown', (event) => {
     mouseDownPos = { x: event.clientX, y: event.clientY }
+    longPressTriggered = false
+
+    // Start long-press timer for touch context menu
+    if (event.pointerType === 'touch') {
+      clearLongPress()
+      longPressTimer = setTimeout(() => {
+        longPressTriggered = true
+        // Trigger context menu on long press
+        raycastFromPointer(event)
+        const sessionId = findClickedZone()
+
+        if (sessionId) {
+          const managed = state.managedSessions.find(s => s.claudeSessionId === sessionId)
+          const zoneName = managed?.name || sessionId.slice(0, 8)
+          contextMenu?.show(
+            event.clientX,
+            event.clientY,
+            [
+              { key: 'C', label: `Command`, action: 'command' },
+              { key: 'I', label: `Info`, action: 'info' },
+              { key: 'D', label: `Dismiss "${zoneName}"`, action: 'delete', danger: true },
+            ],
+            { zoneId: sessionId }
+          )
+        }
+      }, LONG_PRESS_DURATION)
+    }
 
     // Start draw mode drag painting
     if (drawMode.isEnabled() && event.button === 0) {
@@ -984,7 +1033,7 @@ function setupClickToPrompt(): void {
       paintedThisDrag.clear()
 
       // Paint the initial hex(es) with brush
-      raycastFromMouse(event)
+      raycastFromPointer(event)
       if (state.scene!.worldFloor) {
         const floorIntersects = raycaster.intersectObject(state.scene!.worldFloor)
         if (floorIntersects.length > 0) {
@@ -1000,19 +1049,27 @@ function setupClickToPrompt(): void {
     }
   })
 
-  // Stop draw mode dragging if mouse released anywhere (safety net)
-  window.addEventListener('mouseup', () => {
+  // Stop draw mode dragging if pointer released anywhere (safety net)
+  window.addEventListener('pointerup', () => {
+    clearLongPress()
     if (isDrawModeDragging) {
       isDrawModeDragging = false
       paintedThisDrag.clear()
     }
   })
 
-  // Draw mode drag painting on mousemove
-  state.scene.renderer.domElement.addEventListener('mousemove', (event) => {
+  // Cancel long press if pointer moves
+  window.addEventListener('pointermove', () => {
+    if (longPressTimer) {
+      clearLongPress()
+    }
+  })
+
+  // Draw mode drag painting on pointermove
+  state.scene.renderer.domElement.addEventListener('pointermove', (event) => {
     if (!state.scene || !isDrawModeDragging || !drawMode.isEnabled()) return
 
-    raycastFromMouse(event)
+    raycastFromPointer(event)
     if (state.scene.worldFloor) {
       // Check both floor and painted hexes (for painting on top of existing)
       const floorIntersects = raycaster.intersectObject(state.scene.worldFloor)
@@ -1032,8 +1089,10 @@ function setupClickToPrompt(): void {
     }
   })
 
-  // Left-click handler
-  state.scene.renderer.domElement.addEventListener('mouseup', (event) => {
+  // Left-click/tap handler
+  state.scene.renderer.domElement.addEventListener('pointerup', (event) => {
+    clearLongPress()
+
     // Stop draw mode dragging
     if (isDrawModeDragging) {
       isDrawModeDragging = false
@@ -1042,7 +1101,13 @@ function setupClickToPrompt(): void {
 
     if (!state.scene || !mouseDownPos) return
 
-    // Check if this was a drag (mouse moved too much)
+    // Skip if long press was triggered (context menu already shown)
+    if (longPressTriggered) {
+      mouseDownPos = null
+      return
+    }
+
+    // Check if this was a drag (pointer moved too much)
     const dx = event.clientX - mouseDownPos.x
     const dy = event.clientY - mouseDownPos.y
     const distance = Math.sqrt(dx * dx + dy * dy)
@@ -1053,7 +1118,7 @@ function setupClickToPrompt(): void {
       return
     }
 
-    raycastFromMouse(event)
+    raycastFromPointer(event)
 
     // In draw mode, skip zone/Claude focus - painting is handled in mousedown/mousemove
     if (drawMode.isEnabled()) {
@@ -1162,12 +1227,12 @@ function setupClickToPrompt(): void {
     }
   })
 
-  // Right-click handler for zones (delete menu)
+  // Right-click handler for zones (delete menu) - desktop only, touch uses long-press
   state.scene.renderer.domElement.addEventListener('contextmenu', (event) => {
     if (!state.scene) return
     event.preventDefault()  // Prevent browser context menu
 
-    raycastFromMouse(event)
+    raycastFromPointer(event as PointerEvent)
     const sessionId = findClickedZone()
 
     if (sessionId) {
@@ -2049,6 +2114,270 @@ function hideTerminal() {
 }
 
 // ============================================================================
+// Standalone Shell Terminal (Multi-shell support)
+// ============================================================================
+
+/**
+ * Generate a unique shell ID
+ */
+function generateShellId(): string {
+  state.shellCounter++
+  return `shell-${state.shellCounter}`
+}
+
+/**
+ * Create a new shell terminal
+ */
+function createShell(shellId?: string): string {
+  const id = shellId || generateShellId()
+  const container = document.getElementById('shell-terminals')
+  if (!container) return id
+
+  // Create shell container
+  const shellDiv = document.createElement('div')
+  shellDiv.className = 'shell-terminal'
+  shellDiv.dataset.shellId = id
+
+  // Create terminal wrapper
+  const wrapper = document.createElement('div')
+  wrapper.className = 'terminal-wrapper'
+  shellDiv.appendChild(wrapper)
+  container.appendChild(shellDiv)
+
+  // Create terminal UI
+  const terminal = new TerminalUI({
+    container: wrapper,
+    onData: (data) => {
+      if (state.client) {
+        state.client.sendRaw({
+          type: 'pty:input',
+          sessionId: id,
+          data,
+        })
+      }
+    },
+    onResize: (cols, rows) => {
+      if (state.client) {
+        state.client.sendRaw({
+          type: 'pty:resize',
+          sessionId: id,
+          cols,
+          rows,
+        })
+      }
+    },
+  })
+
+  state.shells.set(id, terminal)
+
+  // Create tab
+  addShellTab(id)
+
+  // Subscribe to server
+  if (state.client) {
+    state.client.sendRaw({
+      type: 'shell:subscribe',
+      sessionId: id,
+      cwd: state.serverCwd !== '~' ? state.serverCwd : undefined,
+    })
+  }
+
+  // Switch to the new shell
+  switchToShell(id)
+
+  return id
+}
+
+/**
+ * Add a tab for a shell
+ */
+function addShellTab(shellId: string) {
+  const tabsContainer = document.getElementById('shell-tabs')
+  if (!tabsContainer) return
+
+  // Check if tab already exists
+  if (tabsContainer.querySelector(`[data-shell-id="${shellId}"]`)) return
+
+  const tab = document.createElement('div')
+  tab.className = 'shell-tab'
+  tab.dataset.shellId = shellId
+
+  const num = shellId.replace('shell-', '')
+  tab.innerHTML = `
+    <span class="shell-name">Shell ${num}</span>
+    <button class="close-btn" title="Close shell">×</button>
+  `
+
+  // Click to switch
+  tab.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).classList.contains('close-btn')) return
+    switchToShell(shellId)
+  })
+
+  // Close button
+  const closeBtn = tab.querySelector('.close-btn')
+  closeBtn?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    closeShell(shellId)
+  })
+
+  tabsContainer.appendChild(tab)
+}
+
+/**
+ * Switch to a specific shell
+ */
+function switchToShell(shellId: string) {
+  state.activeShellId = shellId
+
+  // Update tab states
+  const tabs = document.querySelectorAll('.shell-tab')
+  tabs.forEach(tab => {
+    tab.classList.toggle('active', (tab as HTMLElement).dataset.shellId === shellId)
+  })
+
+  // Update terminal visibility
+  const terminals = document.querySelectorAll('.shell-terminal')
+  terminals.forEach(term => {
+    term.classList.toggle('active', (term as HTMLElement).dataset.shellId === shellId)
+  })
+
+  // Fit and focus
+  const terminal = state.shells.get(shellId)
+  setTimeout(() => {
+    terminal?.fit()
+    terminal?.focus()
+  }, 50)
+}
+
+/**
+ * Close a shell
+ */
+function closeShell(shellId: string) {
+  // Send close to server
+  if (state.client) {
+    state.client.sendRaw({
+      type: 'shell:close',
+      sessionId: shellId,
+    })
+  }
+
+  // Remove terminal
+  const terminal = state.shells.get(shellId)
+  terminal?.dispose()
+  state.shells.delete(shellId)
+
+  // Remove UI elements
+  const tab = document.querySelector(`.shell-tab[data-shell-id="${shellId}"]`)
+  tab?.remove()
+
+  const terminalDiv = document.querySelector(`.shell-terminal[data-shell-id="${shellId}"]`)
+  terminalDiv?.remove()
+
+  // Switch to another shell if this was active
+  if (state.activeShellId === shellId) {
+    state.activeShellId = null
+    // Switch to first available shell, or create new one
+    const firstShell = state.shells.keys().next().value
+    if (firstShell) {
+      switchToShell(firstShell)
+    }
+  }
+}
+
+/**
+ * Setup standalone shell terminal panel
+ */
+function setupShellPanel() {
+  // Setup new shell button
+  const newShellBtn = document.getElementById('new-shell-btn')
+  newShellBtn?.addEventListener('click', () => {
+    createShell()
+  })
+
+  // Setup desktop tab switching
+  setupSessionsTabs()
+
+  // Mobile shell panel support
+  const mobilePanel = document.getElementById('shell-panel')
+  const clearBtn = document.getElementById('shell-clear')
+
+  clearBtn?.addEventListener('click', () => {
+    if (state.activeShellId) {
+      const terminal = state.shells.get(state.activeShellId)
+      terminal?.clear()
+    }
+  })
+}
+
+/**
+ * Setup sessions panel tab switching (Sessions / Shell)
+ */
+function setupSessionsTabs() {
+  const tabs = document.querySelectorAll('.sessions-tab')
+  const sessionsList = document.getElementById('sessions-list')
+  const shellContent = document.getElementById('shell-tab-content')
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTab = (tab as HTMLElement).dataset.tab
+
+      // Update active tab
+      tabs.forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+
+      // Show/hide content
+      if (targetTab === 'sessions') {
+        sessionsList?.classList.add('active')
+        shellContent?.classList.remove('active')
+      } else if (targetTab === 'shell') {
+        sessionsList?.classList.remove('active')
+        shellContent?.classList.add('active')
+
+        // Create first shell if none exist
+        if (state.shells.size === 0) {
+          createShell()
+        } else if (state.activeShellId) {
+          // Fit active terminal
+          setTimeout(() => {
+            const terminal = state.shells.get(state.activeShellId!)
+            terminal?.fit()
+            terminal?.focus()
+          }, 50)
+        }
+      }
+    })
+  })
+}
+
+/**
+ * Show shell panel (mobile)
+ */
+function showShellPanel() {
+  const panel = document.getElementById('shell-panel')
+  panel?.classList.remove('hidden')
+
+  // Create first shell if none exist
+  if (state.shells.size === 0) {
+    createShell()
+  } else if (state.activeShellId) {
+    const terminal = state.shells.get(state.activeShellId)
+    setTimeout(() => {
+      terminal?.fit()
+      terminal?.focus()
+    }, 50)
+  }
+}
+
+/**
+ * Hide shell panel
+ */
+function hideShellPanel() {
+  const panel = document.getElementById('shell-panel')
+  panel?.classList.add('hidden')
+}
+
+// ============================================================================
 // Audio Initialization
 // ============================================================================
 
@@ -2082,6 +2411,7 @@ function setupSettingsModal(): void {
   const volumeValue = document.getElementById('settings-volume-value')
   const spatialCheckbox = document.getElementById('settings-spatial-audio') as HTMLInputElement | null
   const streamingCheckbox = document.getElementById('settings-streaming-mode') as HTMLInputElement | null
+  const stackShellCheckbox = document.getElementById('settings-stack-shell') as HTMLInputElement | null
   const gridSizeSlider = document.getElementById('settings-grid-size') as HTMLInputElement | null
   const gridSizeValue = document.getElementById('settings-grid-size-value')
   const refreshBtn = document.getElementById('settings-refresh-sessions')
@@ -2155,6 +2485,26 @@ function setupSettingsModal(): void {
     }
   }
 
+  // Load saved stack-shell setting from localStorage
+  const savedStackShell = localStorage.getItem('vibecraft-stack-shell')
+  if (savedStackShell !== null) {
+    const enabled = savedStackShell === 'true'
+    if (stackShellCheckbox) stackShellCheckbox.checked = enabled
+    applyStackShellMode(enabled)
+  }
+
+  // Apply stack-shell mode
+  function applyStackShellMode(enabled: boolean) {
+    const sessionsPanel = document.getElementById('sessions-panel')
+    if (sessionsPanel) {
+      if (enabled) {
+        sessionsPanel.classList.add('stacked-shell')
+      } else {
+        sessionsPanel.classList.remove('stacked-shell')
+      }
+    }
+  }
+
   // Open modal
   settingsBtn?.addEventListener('click', () => {
     // Sync slider/checkbox states with current settings
@@ -2176,6 +2526,10 @@ function setupSettingsModal(): void {
     // Sync streaming mode checkbox
     if (streamingCheckbox) {
       streamingCheckbox.checked = localStorage.getItem('vibecraft-streaming-mode') === 'true'
+    }
+    // Sync stack-shell checkbox
+    if (stackShellCheckbox) {
+      stackShellCheckbox.checked = localStorage.getItem('vibecraft-stack-shell') === 'true'
     }
     // Sync port input
     if (portInput) portInput.value = String(AGENT_PORT)
@@ -2231,6 +2585,17 @@ function setupSettingsModal(): void {
     const enabled = streamingCheckbox.checked
     localStorage.setItem('vibecraft-streaming-mode', String(enabled))
     applyStreamingMode(enabled)
+  })
+
+  // Stack shell checkbox
+  stackShellCheckbox?.addEventListener('change', () => {
+    const enabled = stackShellCheckbox.checked
+    localStorage.setItem('vibecraft-stack-shell', String(enabled))
+    applyStackShellMode(enabled)
+    // Refit active terminal after layout change
+    if (state.activeShellId) {
+      setTimeout(() => state.shells.get(state.activeShellId!)?.fit(), 50)
+    }
   })
 
   // Port change - save to localStorage and prompt refresh
@@ -2697,19 +3062,39 @@ function init() {
       }
     } else if (message.type.startsWith('pty:')) {
       // Handle PTY terminal messages
-      if (state.terminalManager) {
-        state.terminalManager.handleMessage(message as {
-          type: string
-          sessionId: string
-          data?: string
-          exitCode?: number
-        })
+      const ptyMessage = message as {
+        type: string
+        sessionId: string
+        data?: string
+        exitCode?: number
+      }
+
+      // Check if this is for a standalone shell terminal
+      const shellTerminal = state.shells.get(ptyMessage.sessionId)
+      if (shellTerminal) {
+        if (ptyMessage.type === 'pty:output' || ptyMessage.type === 'pty:buffer') {
+          if (ptyMessage.data) {
+            shellTerminal.write(ptyMessage.data)
+          }
+        } else if (ptyMessage.type === 'pty:exit') {
+          shellTerminal.write(`\r\n\x1b[90m[Shell exited with code ${ptyMessage.exitCode}]\x1b[0m\r\n`)
+          // Remove the shell after a short delay so user can see the message
+          setTimeout(() => closeShell(ptyMessage.sessionId), 2000)
+        }
+      } else {
+        // Regular session terminal
+        if (state.terminalManager) {
+          state.terminalManager.handleMessage(ptyMessage)
+        }
       }
     }
   })
 
   // Setup terminal panel BEFORE connect (so it's ready when sessions arrive)
   setupTerminalPanel()
+
+  // Setup standalone shell panel
+  setupShellPanel()
 
   state.client.connect()
 
@@ -2860,6 +3245,32 @@ function init() {
 
   // Check for updates (non-blocking)
   checkForUpdates()
+
+  // Setup mobile layout manager
+  setupMobileLayout({
+    onViewChange: (view) => {
+      console.log('Mobile view changed to:', view)
+      // Trigger resize when switching to scene view to ensure canvas is sized correctly
+      if (view === 'scene' && state.scene) {
+        window.dispatchEvent(new Event('resize'))
+      }
+      // Handle shell view - create shell if needed, fit terminal
+      if (view === 'shell') {
+        if (state.shells.size === 0) {
+          createShell()
+        } else if (state.activeShellId) {
+          requestAnimationFrame(() => {
+            const terminal = state.shells.get(state.activeShellId!)
+            terminal?.fit()
+            terminal?.focus()
+          })
+        }
+      }
+    },
+    onMobileChange: (isMobile) => {
+      console.log('Mobile mode:', isMobile)
+    },
+  })
 
   console.log('Vibecraft initialized (multi-session enabled)')
 }

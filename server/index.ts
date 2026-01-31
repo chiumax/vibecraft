@@ -1550,6 +1550,16 @@ function broadcast(message: ServerMessage) {
   }
 }
 
+function broadcastShellList() {
+  const shells = ptyManager.listShells()
+  const data = JSON.stringify({ type: 'shell:list', payload: shells })
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data)
+    }
+  }
+}
+
 function handleClientMessage(ws: WebSocket, message: ClientMessage) {
   switch (message.type) {
     case 'subscribe':
@@ -1620,6 +1630,40 @@ function handleClientMessage(ws: WebSocket, message: ClientMessage) {
       const { sessionId, cols, rows } = message
       if (ptyManager.resize(sessionId, cols, rows)) {
         debug(`Resized PTY ${sessionId} to ${cols}x${rows}`)
+      }
+      break
+    }
+
+    // Standalone shell terminal (not attached to a Claude session)
+    case 'shell:subscribe': {
+      const { sessionId, cwd } = message as { sessionId: string; cwd?: string }
+      try {
+        if (ptyManager.subscribeShell(sessionId, ws, cwd)) {
+          debug(`Client subscribed to shell: ${sessionId}`)
+          // Send updated shell list to all clients
+          broadcastShellList()
+        }
+      } catch (err) {
+        console.error(`[Shell] Subscribe error for ${sessionId}:`, err)
+        ws.send(JSON.stringify({ type: 'error', payload: { message: `Shell subscribe error: ${err}` } }))
+      }
+      break
+    }
+
+    // List all shell sessions
+    case 'shell:list': {
+      const shells = ptyManager.listShells()
+      ws.send(JSON.stringify({ type: 'shell:list', payload: shells }))
+      break
+    }
+
+    // Close a shell session
+    case 'shell:close': {
+      const { sessionId } = message as { sessionId: string }
+      if (ptyManager.closeShell(sessionId)) {
+        debug(`Closed shell: ${sessionId}`)
+        // Send updated shell list to all clients
+        broadcastShellList()
       }
       break
     }

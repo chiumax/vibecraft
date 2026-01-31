@@ -171,6 +171,8 @@ export type ServerMessage =
   | { type: 'pty:output'; sessionId: string; data: string }
   | { type: 'pty:buffer'; sessionId: string; data: string }
   | { type: 'pty:exit'; sessionId: string; exitCode: number }
+  // Shell management
+  | { type: 'shell:list'; payload: { id: string; cwd: string }[] }
 
 /** Client -> Server messages */
 export type ClientMessage =
@@ -185,6 +187,10 @@ export type ClientMessage =
   | { type: 'pty:unsubscribe'; sessionId: string }
   | { type: 'pty:input'; sessionId: string; data: string }
   | { type: 'pty:resize'; sessionId: string; cols: number; rows: number }
+  // Standalone shell terminal
+  | { type: 'shell:subscribe'; sessionId: string; cwd?: string }
+  | { type: 'shell:list' }
+  | { type: 'shell:close'; sessionId: string }
 
 // ============================================================================
 // Visualization State

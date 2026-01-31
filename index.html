@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="description" content="Watch and Manage Claude Code in 3D!" />
     <meta name="theme-color" content="#0f172a" />
     <title>Vibecraft - Watch and Manage Claude Code in 3D!</title>
@@ -111,27 +111,73 @@
           </div>
         </div>
 
-        <!-- Session Management -->
+        <!-- Session Management with Tabs -->
         <div id="sessions-panel">
-          <div id="sessions-list">
-            <div id="managed-sessions"></div>
+          <div id="sessions-tabs">
+            <button class="sessions-tab active" data-tab="sessions">Sessions</button>
+            <button class="sessions-tab" data-tab="shell">Shell</button>
           </div>
-        </div>
-
-        <!-- Terminal panel (visible when session selected) -->
-        <div id="terminal-panel" class="hidden">
-          <div class="terminal-header">
-            <div class="terminal-header-left">
-              <div class="terminal-indicator"></div>
-              <span class="terminal-title" id="terminal-session-name">Terminal</span>
+          <div id="sessions-content">
+            <div id="sessions-list" class="tab-content active">
+              <div id="managed-sessions"></div>
+              <!-- Terminal panel (inside sessions tab) -->
+              <div id="terminal-panel" class="hidden">
+                <div class="terminal-header">
+                  <div class="terminal-header-left">
+                    <div class="terminal-indicator"></div>
+                    <span class="terminal-title" id="terminal-session-name">Terminal</span>
+                  </div>
+                  <div class="terminal-controls">
+                    <button class="terminal-btn" id="terminal-expand" title="Expand">⤢</button>
+                  </div>
+                </div>
+                <div id="terminal-output"></div>
+              </div>
             </div>
-            <div class="terminal-controls">
-              <button class="terminal-btn" id="terminal-expand" title="Expand">⤢</button>
+            <div id="shell-tab-content" class="tab-content">
+              <div id="shell-tabs-bar">
+                <div id="shell-tabs"></div>
+                <button id="new-shell-btn" title="New Shell">+</button>
+              </div>
+              <div id="shell-terminals"></div>
             </div>
           </div>
-          <div id="terminal-output"></div>
         </div>
       </div>
+
+      <!-- Shell Terminal Panel (standalone shell access) -->
+      <div id="shell-panel" class="hidden">
+        <div class="terminal-header">
+          <div class="terminal-header-left">
+            <div class="terminal-indicator"></div>
+            <span class="terminal-title">Shell</span>
+          </div>
+          <div class="terminal-controls">
+            <button class="terminal-btn" id="shell-clear" title="Clear">⌫</button>
+          </div>
+        </div>
+        <div id="shell-output"></div>
+      </div>
+
+      <!-- Mobile Navigation Bar -->
+      <nav id="mobile-nav">
+        <button id="nav-feed" class="mobile-nav-btn active" data-view="feed">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">Feed</span>
+        </button>
+        <button id="nav-scene" class="mobile-nav-btn" data-view="scene">
+          <span class="nav-icon">🎮</span>
+          <span class="nav-label">Workshop</span>
+        </button>
+        <button id="nav-terminal" class="mobile-nav-btn" data-view="terminal">
+          <span class="nav-icon">⌨️</span>
+          <span class="nav-label">Terminal</span>
+        </button>
+        <button id="nav-shell" class="mobile-nav-btn" data-view="shell">
+          <span class="nav-icon">💻</span>
+          <span class="nav-label">Shell</span>
+        </button>
+      </nav>
     </div>
 
     <!-- New Session Modal -->
@@ -229,6 +275,17 @@
             <span id="settings-port-status" class="port-status"></span>
           </div>
           <div class="field-hint">Port where the Vibecraft agent is running. Changes require refresh.</div>
+        </div>
+
+        <div class="modal-field">
+          <label>Layout</label>
+          <div class="settings-checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="settings-stack-shell" />
+              <span>Stack Shell with Sessions</span>
+            </label>
+            <span class="field-hint-inline">Show both panels instead of switching</span>
+          </div>
         </div>
 
         <div class="modal-field">

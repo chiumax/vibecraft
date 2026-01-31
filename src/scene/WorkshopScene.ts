@@ -267,10 +267,23 @@ export class WorkshopScene {
     this.controls.maxDistance = 150 // Extended for multi-zone overview
     this.controls.target.set(0, 0, 0)
 
+    // Configure touch controls for mobile
+    this.controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN
+    }
+
     // Stop camera animation when user manually interacts with controls
     this.controls.addEventListener('start', () => {
       this.cameraAnimating = false
     })
+
+    // Mobile performance optimizations
+    const isMobile = window.matchMedia('(max-width: 1023px)').matches
+    if (isMobile) {
+      this.renderer.shadowMap.enabled = false
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    }
 
     // Setup
     this.setupLighting()

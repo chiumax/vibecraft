@@ -317,6 +317,151 @@ export class PtyManager {
   getTmuxSession(sessionId: string): string | undefined {
     return this.sessions.get(sessionId)?.tmuxSession
   }
+
+  /**
+   * Create a standalone shell session (not attached to tmux/Claude)
+   * Useful for general terminal access
+   */
+  createShell(sessionId: string, cwd?: string): PtySession {
+    // If session already exists, return it
+    const existing = this.sessions.get(sessionId)
+    if (existing) return existing
+
+    // Build environment
+    const env = {
+      ...process.env,
+      PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}`,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+    }
+
+    // Spawn a regular shell PTY (not through tmux)
+    const shell = process.env.SHELL || '/bin/zsh'
+    const ptyProcess = pty.spawn(shell, ['-l'], {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 40,
+      cwd: cwd || process.env.HOME || '/',
+      env,
+    })
+
+    const session: PtySession = {
+      id: sessionId,
+      tmuxSession: '__shell__', // Special marker for standalone shells
+      pty: ptyProcess,
+      clients: new Set(),
+      buffer: [],
+    }
+
+    // Buffer output for replay to new clients
+    ptyProcess.onData((data) => {
+      session.buffer.push(data)
+      if (session.buffer.length > MAX_BUFFER_LINES) {
+        session.buffer.shift()
+      }
+
+      // Broadcast to all connected clients
+      for (const client of session.clients) {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(JSON.stringify({
+            type: 'pty:output',
+            sessionId,
+            data,
+          }))
+        }
+      }
+    })
+
+    ptyProcess.onExit(({ exitCode }) => {
+      session.pty = null
+      this.sessions.delete(sessionId)
+
+      // Notify clients
+      for (const client of session.clients) {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: 'pty:exit',
+            sessionId,
+            exitCode,
+          }))
+        }
+      }
+    })
+
+    this.sessions.set(sessionId, session)
+    return session
+  }
+
+  /**
+   * Subscribe to a shell session (creates if not exists)
+   */
+  subscribeShell(sessionId: string, ws: WebSocket, cwd?: string): boolean {
+    let session = this.sessions.get(sessionId)
+
+    // Create shell session if it doesn't exist
+    if (!session) {
+      session = this.createShell(sessionId, cwd)
+    }
+
+    session.clients.add(ws)
+
+    // Send buffered output so client sees history
+    if (session.buffer.length > 0) {
+      ws.send(JSON.stringify({
+        type: 'pty:buffer',
+        sessionId,
+        data: session.buffer.join(''),
+      }))
+    }
+
+    return true
+  }
+
+  /**
+   * List all standalone shell sessions
+   */
+  listShells(): { id: string; cwd: string }[] {
+    const shells: { id: string; cwd: string }[] = []
+    for (const [id, session] of this.sessions) {
+      // Only include standalone shells (not Claude sessions)
+      if (session.tmuxSession === '__shell__') {
+        shells.push({
+          id,
+          cwd: process.env.HOME || '/', // Could track actual cwd if needed
+        })
+      }
+    }
+    return shells
+  }
+
+  /**
+   * Close a shell session
+   */
+  closeShell(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.tmuxSession !== '__shell__') {
+      return false
+    }
+
+    // Kill the PTY process
+    if (session.pty) {
+      session.pty.kill()
+    }
+
+    // Notify clients
+    for (const client of session.clients) {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({
+          type: 'pty:exit',
+          sessionId,
+          exitCode: 0,
+        }))
+      }
+    }
+
+    this.sessions.delete(sessionId)
+    return true
+  }
 }
 
 // Singleton instance

@@ -3323,6 +3323,26 @@ function init() {
   // Check for updates (non-blocking)
   checkForUpdates()
 
+  // Refit terminals when page becomes visible (handles device switching)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Refit active Claude terminal
+      state.terminalManager?.refitActive()
+      // Refit active shell terminal
+      if (state.activeShellId) {
+        state.shells.get(state.activeShellId)?.fit()
+      }
+    }
+  })
+
+  // Also refit on window focus (handles returning from other apps)
+  window.addEventListener('focus', () => {
+    state.terminalManager?.refitActive()
+    if (state.activeShellId) {
+      state.shells.get(state.activeShellId)?.fit()
+    }
+  })
+
   console.log('Vibecraft initialized (multi-session enabled)')
 }
 

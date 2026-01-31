@@ -101,8 +101,22 @@ export class TerminalUI {
 
   /**
    * Fit terminal to container size
+   * Uses multiple attempts to handle timing issues when container is being resized
    */
   fit(): void {
+    // Immediate fit
+    this.doFit()
+
+    // Delayed fits to catch container size settling
+    requestAnimationFrame(() => this.doFit())
+    setTimeout(() => this.doFit(), 50)
+    setTimeout(() => this.doFit(), 150)
+  }
+
+  /**
+   * Internal fit method
+   */
+  private doFit(): void {
     try {
       this.fitAddon.fit()
     } catch {
@@ -243,6 +257,19 @@ export class TerminalManager {
       }
     }
     this.activeSessionId = null
+  }
+
+  /**
+   * Refit the currently active terminal
+   * Call this when visibility changes or when returning from another device
+   */
+  refitActive(): void {
+    if (this.activeSessionId) {
+      const terminal = this.terminals.get(this.activeSessionId)
+      if (terminal) {
+        terminal.fit()
+      }
+    }
   }
 
   /**

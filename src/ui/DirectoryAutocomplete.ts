@@ -8,7 +8,7 @@
 // Injected by Vite at build time
 declare const __VIBECRAFT_DEFAULT_PORT__: number
 const API_PORT = __VIBECRAFT_DEFAULT_PORT__
-const API_URL = `http://localhost:${API_PORT}`
+const API_URL = `http://${window.location.hostname}:${API_PORT}`
 
 interface AutocompleteResult {
   path: string

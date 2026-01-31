@@ -114,11 +114,30 @@
 
 .mobile-layout #sessions-panel {
   padding: 8px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mobile-layout #sessions-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .mobile-layout #sessions-list {
   padding: 0 4px 8px;
-  max-height: 200px;
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mobile-layout #managed-sessions {
+  max-height: none;
+  overflow-y: auto;
 }
 
 /* HUD adjustments */

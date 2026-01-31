@@ -52,9 +52,9 @@
   flex-direction: column;
 }
 
-/* When shell is active or terminal is visible, content expands */
+/* When shell or sessions tab is active, content expands */
 #sessions-panel:has(#shell-tab-content.active):not(.stacked-shell) #sessions-content,
-#sessions-panel:has(#terminal-panel:not(.hidden)) #sessions-content {
+#sessions-panel:has(#sessions-list.active) #sessions-content {
   flex: 1;
 }
 
@@ -66,16 +66,8 @@
   display: block;
 }
 
-/* Sessions list tab */
-#sessions-list.tab-content.active {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-/* When terminal is visible inside sessions tab, expand the panel */
-#sessions-panel:has(#terminal-panel:not(.hidden)) {
+/* When sessions tab is active with terminal, expand the panel */
+#sessions-panel:has(#sessions-list.active) {
   flex: 1;
   min-height: 0;
 }
@@ -277,12 +269,21 @@
   border-color: rgba(74, 222, 128, 0.6);
 }
 
-#sessions-list {
-  display: flex;
+/* Base sessions list - hidden by default as tab-content */
+#sessions-list.tab-content {
+  display: none;
   flex-direction: column;
   gap: 2px;
   padding: 0 8px 8px;
   overflow: hidden;
+}
+
+/* When active, show as flex and fill available space */
+#sessions-list.tab-content.active {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
 }
 
 #managed-sessions {
@@ -297,7 +298,15 @@
 /* Terminal panel inside sessions list takes remaining space */
 #sessions-list #terminal-panel {
   flex: 1;
-  min-height: 150px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure hidden state works with higher specificity */
+#sessions-list #terminal-panel.hidden {
+  display: none !important;
+  min-height: 0;
 }
 
 /* Unified session item style - compact card layout */

@@ -190,6 +190,15 @@ export class TerminalManager {
       wrapper.style.display = 'none'
       this.container.appendChild(wrapper)
 
+      // Add loading overlay
+      const loading = document.createElement('div')
+      loading.className = 'terminal-loading'
+      loading.innerHTML = `
+        <div class="terminal-loading-spinner"></div>
+        <div class="terminal-loading-text">Connecting to terminal...</div>
+      `
+      wrapper.appendChild(loading)
+
       terminal = new TerminalUI({
         container: wrapper,
         onData: (data) => {
@@ -279,6 +288,12 @@ export class TerminalManager {
     if (message.type === 'pty:output' || message.type === 'pty:buffer') {
       const terminal = this.terminals.get(message.sessionId)
       if (terminal && message.data) {
+        // Hide loading overlay on first output
+        const wrapper = this.container.querySelector(`[data-session-id="${message.sessionId}"]`)
+        const loading = wrapper?.querySelector('.terminal-loading')
+        if (loading) {
+          loading.remove()
+        }
         terminal.write(message.data)
       }
     } else if (message.type === 'pty:detached') {

@@ -2143,6 +2143,16 @@ function createShell(shellId?: string): string {
   const wrapper = document.createElement('div')
   wrapper.className = 'terminal-wrapper'
   shellDiv.appendChild(wrapper)
+
+  // Add loading overlay
+  const loading = document.createElement('div')
+  loading.className = 'terminal-loading'
+  loading.innerHTML = `
+    <div class="terminal-loading-spinner"></div>
+    <div class="terminal-loading-text">Starting shell...</div>
+  `
+  wrapper.appendChild(loading)
+
   container.appendChild(shellDiv)
 
   // Create terminal UI
@@ -3151,6 +3161,12 @@ function init() {
       if (shellTerminal) {
         if (ptyMessage.type === 'pty:output' || ptyMessage.type === 'pty:buffer') {
           if (ptyMessage.data) {
+            // Hide loading overlay on first output
+            const shellDiv = document.querySelector(`.shell-terminal[data-shell-id="${ptyMessage.sessionId}"]`)
+            const loading = shellDiv?.querySelector('.terminal-loading')
+            if (loading) {
+              loading.remove()
+            }
             shellTerminal.write(ptyMessage.data)
           }
         } else if (ptyMessage.type === 'pty:exit') {

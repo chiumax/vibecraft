@@ -2300,25 +2300,16 @@ function closeShell(shellId: string) {
  * Setup standalone shell terminal panel
  */
 function setupShellPanel() {
-  // Setup new shell button
-  const newShellBtn = document.getElementById('new-shell-btn')
-  newShellBtn?.addEventListener('click', () => {
-    createShell()
+  // Setup new shell buttons (there may be multiple - one in feed panel, one in mobile shell panel)
+  const newShellBtns = document.querySelectorAll('#new-shell-btn')
+  newShellBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      createShell()
+    })
   })
 
   // Setup desktop tab switching
   setupSessionsTabs()
-
-  // Mobile shell panel support
-  const mobilePanel = document.getElementById('shell-panel')
-  const clearBtn = document.getElementById('shell-clear')
-
-  clearBtn?.addEventListener('click', () => {
-    if (state.activeShellId) {
-      const terminal = state.shells.get(state.activeShellId)
-      terminal?.clear()
-    }
-  })
 }
 
 /**

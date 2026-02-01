@@ -80,7 +80,41 @@
   bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
   z-index: 60;
   background: #0f172a;
+  display: none;
   flex-direction: column;
+}
+
+.tablet-layout #shell-panel.panel-visible {
+  display: flex !important;
+}
+
+.tablet-layout #shell-panel #shell-tabs-bar {
+  flex-shrink: 0;
+}
+
+.tablet-layout #shell-panel #shell-terminals {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.tablet-layout #shell-panel .shell-terminal {
+  position: absolute;
+  inset: 0;
+}
+
+.tablet-layout #shell-panel .shell-terminal.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.tablet-layout #shell-panel .terminal-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.tablet-layout #shell-panel .xterm {
+  height: 100% !important;
 }
 
 /* Mobile navigation - visible */

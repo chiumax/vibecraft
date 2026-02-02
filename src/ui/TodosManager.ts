@@ -1,7 +1,8 @@
 /**
  * TodosManager - Manages per-session todos
  *
- * Stores todos in localStorage, organized by session/workspace.
+ * Stores todos on the server (file-based), with backwards compatibility
+ * for migrating existing localStorage data.
  */
 
 export interface Todo {
@@ -17,23 +18,52 @@ export interface SessionTodos {
   todos: Todo[]
 }
 
-const STORAGE_KEY = 'vibecraft-todos'
+const LEGACY_STORAGE_KEY = 'vibecraft-todos'
 
 export class TodosManager {
   private todos: Map<string, SessionTodos> = new Map()
   private container: HTMLElement | null = null
   private onUpdate: (() => void) | null = null
+  private serverPort: number = 4003
+  private isLoaded = false
 
   constructor() {
-    this.load()
+    // Defer loading until init() is called
   }
 
   /**
    * Initialize the UI in the given container
+   * Loads data asynchronously and re-renders when ready
    */
   init(container: HTMLElement) {
     this.container = container
+
+    // Render immediately with empty state
     this.render()
+
+    // Load todos from server in background
+    this.loadAndMigrate()
+  }
+
+  /**
+   * Load from server and migrate localStorage in background
+   */
+  private async loadAndMigrate(): Promise<void> {
+    // Load todos from server
+    await this.load()
+
+    // Check for localStorage migration
+    await this.migrateFromLocalStorage()
+
+    // Re-render with loaded data
+    this.render()
+  }
+
+  /**
+   * Set the server port (for API calls)
+   */
+  setServerPort(port: number) {
+    this.serverPort = port
   }
 
   /**
@@ -44,27 +74,82 @@ export class TodosManager {
   }
 
   /**
-   * Load todos from localStorage
+   * Load todos from server
    */
-  private load() {
+  private async load(): Promise<void> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const data = JSON.parse(stored) as SessionTodos[]
-        this.todos = new Map(data.map(st => [st.sessionId, st]))
+      const response = await fetch(`http://localhost:${this.serverPort}/todos`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.ok && Array.isArray(data.todos)) {
+          this.todos = new Map(data.todos.map((st: SessionTodos) => [st.sessionId, st]))
+        }
       }
+      this.isLoaded = true
     } catch (e) {
-      console.warn('Failed to load todos:', e)
+      console.warn('Failed to load todos from server:', e)
+      this.isLoaded = true
     }
   }
 
   /**
-   * Save todos to localStorage
+   * Check for localStorage data and migrate to server
    */
-  private save() {
+  private async migrateFromLocalStorage(): Promise<void> {
+    try {
+      const stored = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (!stored) return
+
+      const legacyData = JSON.parse(stored) as SessionTodos[]
+      if (!Array.isArray(legacyData) || legacyData.length === 0) {
+        // Empty or invalid, just clear it
+        localStorage.removeItem(LEGACY_STORAGE_KEY)
+        return
+      }
+
+      console.log(`Migrating ${legacyData.length} session todos from localStorage to server...`)
+
+      // Send to server for merge
+      const response = await fetch(`http://localhost:${this.serverPort}/todos/migrate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(legacyData),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.ok && Array.isArray(data.todos)) {
+          // Update local state with merged data
+          this.todos = new Map(data.todos.map((st: SessionTodos) => [st.sessionId, st]))
+
+          // Clear localStorage after successful migration
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+          console.log('Successfully migrated todos from localStorage to server')
+        }
+      } else {
+        console.warn('Failed to migrate todos to server, will try again later')
+      }
+    } catch (e) {
+      console.warn('Failed to migrate todos from localStorage:', e)
+    }
+  }
+
+  /**
+   * Save todos to server
+   */
+  private async save(): Promise<void> {
     try {
       const data = Array.from(this.todos.values())
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      const response = await fetch(`http://localhost:${this.serverPort}/todos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        console.warn('Failed to save todos to server')
+      }
+
       this.onUpdate?.()
     } catch (e) {
       console.warn('Failed to save todos:', e)

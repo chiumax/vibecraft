@@ -88,6 +88,7 @@ const DEBUG = process.env.VIBECRAFT_DEBUG === 'true'
 const TMUX_SESSION = process.env.VIBECRAFT_TMUX_SESSION ?? DEFAULTS.TMUX_SESSION
 const SESSIONS_FILE = resolve(expandHome(process.env.VIBECRAFT_SESSIONS_FILE ?? DEFAULTS.SESSIONS_FILE))
 const TILES_FILE = resolve(expandHome(process.env.VIBECRAFT_TILES_FILE ?? '~/.vibecraft/data/tiles.json'))
+const TODOS_FILE = resolve(expandHome(process.env.VIBECRAFT_TODOS_FILE ?? '~/.vibecraft/data/todos.json'))
 
 /** Time before a "working" session auto-transitions to idle (failsafe for missed events) */
 const WORKING_TIMEOUT_MS = 120_000 // 2 minutes
@@ -317,6 +318,23 @@ const managedSessions = new Map<string, ManagedSession>()
 
 /** Text tiles (grid labels) */
 const textTiles = new Map<string, TextTile>()
+
+/** Todos storage - keyed by session ID */
+interface Todo {
+  id: string
+  text: string
+  completed: boolean
+  createdAt: number
+}
+
+interface SessionTodos {
+  sessionId: string
+  sessionName: string
+  todos: Todo[]
+}
+
+/** All session todos */
+let allTodos: SessionTodos[] = []
 
 /** Git status tracker for managed sessions */
 const gitStatusManager = new GitStatusManager()
@@ -1249,6 +1267,71 @@ function broadcastTiles(): void {
     type: 'text_tiles',
     payload: getTiles(),
   })
+}
+
+// ============================================================================
+// Todos Storage
+// ============================================================================
+
+/**
+ * Get all todos
+ */
+function getTodos(): SessionTodos[] {
+  return allTodos
+}
+
+/**
+ * Save todos to disk
+ */
+function saveTodos(): void {
+  try {
+    writeFileSync(TODOS_FILE, JSON.stringify(allTodos, null, 2))
+    debug(`Saved ${allTodos.length} session todos to ${TODOS_FILE}`)
+  } catch (e) {
+    console.error('Failed to save todos:', e)
+  }
+}
+
+/**
+ * Load todos from disk
+ */
+function loadTodos(): void {
+  if (!existsSync(TODOS_FILE)) {
+    debug('No saved todos file found')
+    return
+  }
+
+  try {
+    const content = readFileSync(TODOS_FILE, 'utf-8')
+    allTodos = JSON.parse(content) as SessionTodos[]
+    log(`Loaded ${allTodos.length} session todos from ${TODOS_FILE}`)
+  } catch (e) {
+    console.error('Failed to load todos:', e)
+  }
+}
+
+/**
+ * Merge todos from client (for localStorage migration)
+ * Merges incoming todos with existing ones, avoiding duplicates by todo ID
+ */
+function mergeTodos(incoming: SessionTodos[]): void {
+  for (const incomingSession of incoming) {
+    const existingSession = allTodos.find(s => s.sessionId === incomingSession.sessionId)
+    if (existingSession) {
+      // Merge todos, avoiding duplicates
+      for (const todo of incomingSession.todos) {
+        if (!existingSession.todos.some(t => t.id === todo.id)) {
+          existingSession.todos.push(todo)
+        }
+      }
+      // Update session name if newer
+      existingSession.sessionName = incomingSession.sessionName
+    } else {
+      // Add new session todos
+      allTodos.push(incomingSession)
+    }
+  }
+  saveTodos()
 }
 
 // ============================================================================
@@ -2427,6 +2510,58 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Todos API
+  // -------------------------------------------------------------------------
+
+  // GET /todos - Get all todos
+  if (req.method === 'GET' && req.url === '/todos') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, todos: getTodos() }))
+    return
+  }
+
+  // PUT /todos - Replace all todos (full save)
+  if (req.method === 'PUT' && req.url === '/todos') {
+    collectRequestBody(req).then(body => {
+      try {
+        const data = JSON.parse(body) as SessionTodos[]
+        allTodos = data
+        saveTodos()
+        log(`Saved ${allTodos.length} session todos`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // POST /todos/migrate - Merge localStorage todos (backwards compatibility)
+  if (req.method === 'POST' && req.url === '/todos/migrate') {
+    collectRequestBody(req).then(body => {
+      try {
+        const data = JSON.parse(body) as SessionTodos[]
+        mergeTodos(data)
+        log(`Migrated ${data.length} session todos from localStorage`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, todos: getTodos() }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
   // Static file serving for frontend (production mode)
   serveStaticFile(req, res)
 }
@@ -2517,6 +2652,9 @@ function main() {
 
   // Load saved text tiles
   loadTiles()
+
+  // Load saved todos
+  loadTodos()
 
   // Start git status tracking
   gitStatusManager.setUpdateHandler(({ sessionId, status }) => {

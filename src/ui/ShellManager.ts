@@ -197,8 +197,9 @@ export function closeShell(shellId: string): void {
 
 /**
  * Setup standalone shell terminal panel
+ * @param apiUrl - The API URL for server communication
  */
-export function setupShellPanel(): void {
+export function setupShellPanel(apiUrl: string): void {
   // Setup new shell buttons (there may be multiple - one in feed panel, one in mobile shell panel)
   const newShellBtns = document.querySelectorAll('#new-shell-btn')
   newShellBtns.forEach(btn => {
@@ -208,20 +209,22 @@ export function setupShellPanel(): void {
   })
 
   // Setup desktop tab switching
-  setupSessionsTabs()
+  setupSessionsTabs(apiUrl)
 }
 
 /**
  * Setup sessions panel tab switching (Sessions / Shell / Todos)
+ * @param apiUrl - The API URL for server communication
  */
-export function setupSessionsTabs(): void {
+export function setupSessionsTabs(apiUrl: string): void {
   const tabs = document.querySelectorAll('.sessions-tab')
   const sessionsList = document.getElementById('sessions-list')
   const shellContent = document.getElementById('shell-tab-content')
   const todosContent = document.getElementById('todos-tab-content')
 
-  // Initialize todos manager
+  // Initialize todos manager with API URL
   const todosManager = initTodosManager()
+  todosManager.setApiUrl(apiUrl)
   if (todosContent) {
     todosManager.init(todosContent)
   }

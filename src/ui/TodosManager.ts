@@ -24,11 +24,18 @@ export class TodosManager {
   private todos: Map<string, SessionTodos> = new Map()
   private container: HTMLElement | null = null
   private onUpdate: (() => void) | null = null
-  private serverPort: number = 4003
+  private apiUrl: string = '/api'  // Default to relative URL for Vite proxy
   private isLoaded = false
 
   constructor() {
     // Defer loading until init() is called
+  }
+
+  /**
+   * Set the API URL (should be called before init)
+   */
+  setApiUrl(url: string) {
+    this.apiUrl = url
   }
 
   /**
@@ -60,13 +67,6 @@ export class TodosManager {
   }
 
   /**
-   * Set the server port (for API calls)
-   */
-  setServerPort(port: number) {
-    this.serverPort = port
-  }
-
-  /**
    * Set callback for when todos change
    */
   setOnUpdate(callback: () => void) {
@@ -78,7 +78,7 @@ export class TodosManager {
    */
   private async load(): Promise<void> {
     try {
-      const response = await fetch(`http://localhost:${this.serverPort}/todos`)
+      const response = await fetch(`${this.apiUrl}/todos`)
       if (response.ok) {
         const data = await response.json()
         if (data.ok && Array.isArray(data.todos)) {
@@ -110,7 +110,7 @@ export class TodosManager {
       console.log(`Migrating ${legacyData.length} session todos from localStorage to server...`)
 
       // Send to server for merge
-      const response = await fetch(`http://localhost:${this.serverPort}/todos/migrate`, {
+      const response = await fetch(`${this.apiUrl}/todos/migrate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(legacyData),
@@ -140,7 +140,7 @@ export class TodosManager {
   private async save(): Promise<void> {
     try {
       const data = Array.from(this.todos.values())
-      const response = await fetch(`http://localhost:${this.serverPort}/todos`, {
+      const response = await fetch(`${this.apiUrl}/todos`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

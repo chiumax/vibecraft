@@ -2166,6 +2166,16 @@ function init() {
   // Start rendering
   state.scene.start()
 
+  // Hide loading screen and show layout (FOUC prevention)
+  requestAnimationFrame(() => {
+    const loadingScreen = document.getElementById('loading-screen')
+    const layoutContainer = document.getElementById('layout-container')
+    loadingScreen?.classList.add('hidden')
+    layoutContainer?.classList.add('ready')
+    // Remove loading screen from DOM after transition
+    setTimeout(() => loadingScreen?.remove(), 300)
+  })
+
   // Initialize attention system
   state.attentionSystem = new AttentionSystem({
     onQueueChange: () => renderManagedSessions(),
@@ -2470,7 +2480,7 @@ function init() {
   setupTerminalPanel()
 
   // Setup standalone shell panel
-  setupShellPanel()
+  setupShellPanel(API_URL)
 
   state.client.connect()
 

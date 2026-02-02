@@ -10,8 +10,9 @@
 @import './modals.css';
 @import './terminal.css';
 
-/* Responsive layouts - order matters: shared, desktop, tablet, mobile */
-@import './responsive.css'; /* Shared variables and mobile nav base */
-@import './desktop.css';    /* Desktop layout (1024px+) */
-@import './tablet.css';     /* Tablet layout (768px - 1023px) */
-@import './mobile.css';     /* Mobile layout (320px - 767px) */
+/* Responsive layouts - order matters: shared, touch-shared, desktop, tablet, mobile */
+@import './responsive.css';    /* Shared variables and mobile nav base */
+@import './touch-layout.css';  /* Shared mobile/tablet touch styles */
+@import './desktop.css';       /* Desktop layout (1024px+) */
+@import './tablet.css';        /* Tablet-specific overrides (768px - 1023px) */
+@import './mobile.css';        /* Mobile-specific overrides (320px - 767px) */

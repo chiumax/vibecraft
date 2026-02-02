@@ -1,85 +1,10 @@
 /* ============================================================================
    TABLET LAYOUT STYLES (768px - 1023px)
    ============================================================================
-   Full-screen panels with mobile nav, larger touch targets
+   Tablet-specific overrides. Shared touch styles are in touch-layout.css
    ============================================================================ */
 
-/* Tablet layout container */
-.tablet-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  width: 100%;
-  overflow: hidden;
-}
-
-/* Panel states */
-.tablet-layout .panel-hidden {
-  display: none !important;
-}
-
-.tablet-layout .panel-visible {
-  display: flex !important;
-  flex-direction: column;
-}
-
-/* Scene panel - fullscreen when visible */
-.tablet-layout #scene-panel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
-  height: auto;
-  width: 100%;
-  z-index: 50;
-  background: #0a0a0f;
-}
-
-.tablet-layout #scene-panel.panel-visible {
-  display: block !important;
-}
-
-.tablet-layout #canvas-container {
-  width: 100%;
-  height: 100%;
-}
-
-/* Feed panel - fills available space above nav */
-.tablet-layout #feed-panel {
-  position: relative;
-  width: 100%;
-  height: auto;
-  flex: 1;
-  min-height: 0;
-  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
-  background: #111;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Terminal panel - fullscreen overlay */
-.tablet-layout #terminal-panel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
-  z-index: 60;
-  background: #0f172a;
-  border: none;
-}
-
-
-/* Mobile navigation - visible */
-.tablet-layout #mobile-nav {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-}
-
-/* Larger touch targets for tablet */
+/* Larger touch targets for tablet nav */
 .tablet-layout .mobile-nav-btn {
   padding: 10px 24px;
   min-width: 80px;
@@ -102,128 +27,79 @@
   min-height: 52px;
 }
 
-/* HUD adjustments */
-.tablet-layout #keybind-helper {
-  display: none;
-}
-
-.tablet-layout .hud-btn {
-  min-width: var(--touch-target-min);
-  min-height: var(--touch-target-min);
-  padding: 8px;
-}
-
-.tablet-layout #timeline-container {
-  bottom: calc(var(--mobile-nav-height) + 12px);
-}
-
-.tablet-layout .voice-control {
-  bottom: calc(var(--mobile-nav-height) + 80px);
-}
-
-.tablet-layout #draw-palette {
-  bottom: calc(var(--mobile-nav-height) + 12px);
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
-}
-
-.tablet-layout .draw-color-btn,
-.tablet-layout .draw-eraser-btn,
-.tablet-layout .draw-clear-btn,
-.tablet-layout .draw-3d-toggle {
-  width: 48px;
-  height: 48px;
-}
-
-.tablet-layout #toast-container {
-  bottom: calc(var(--mobile-nav-height) + 20px);
-}
-
-/* Terminal button sizing */
-.tablet-layout .terminal-header {
-  padding: 8px var(--mobile-padding);
-}
-
-.tablet-layout .terminal-btn {
-  min-width: var(--touch-target-min);
-  min-height: 36px;
-  padding: 6px 12px;
-}
-
-/* Sessions panel - expand to fill space */
 .tablet-layout #sessions-panel {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.tablet-layout #sessions-content {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  padding: 12px;
 }
 
 .tablet-layout #sessions-list {
-  max-height: none;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  padding: 0 8px 12px;
 }
 
-.tablet-layout #managed-sessions {
-  max-height: none;
-  overflow-y: auto;
-}
-
-/* Shell tab content - fill available space */
-.tablet-layout #shell-tab-content {
-  flex: 1;
-  min-height: 0;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.tablet-layout #shell-tab-content.active {
-  display: flex !important;
-}
-
-.tablet-layout #shell-tabs-bar {
-  flex-shrink: 0;
-}
-
-.tablet-layout #shell-terminals {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.tablet-layout .shell-terminal {
-  position: absolute;
-  inset: 0;
-}
-
-.tablet-layout .shell-terminal .terminal-wrapper {
+/* Modals - slightly smaller radius */
+.tablet-layout #new-session-modal .modal-content,
+.tablet-layout #settings-modal .modal-content,
+.tablet-layout #about-modal .modal-content,
+.tablet-layout #question-modal .modal-content,
+.tablet-layout #permission-modal .modal-content,
+.tablet-layout #zone-info-modal .modal-content,
+.tablet-layout #text-label-modal .modal-content,
+.tablet-layout #zone-timeout-modal .modal-content {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   width: 100%;
-  height: 100%;
-}
-
-.tablet-layout .shell-terminal .xterm {
-  height: 100% !important;
-}
-
-/* Todos tab content - fill available space */
-.tablet-layout #todos-tab-content {
-  flex: 1;
-  min-height: 0;
+  max-width: 100%;
+  max-height: 85dvh;
+  border-radius: 12px 12px 0 0;
+  transform: translateY(0);
+  animation: modal-slide-up 0.3s ease-out;
   overflow-y: auto;
 }
 
-.tablet-layout #todos-tab-content.active {
-  display: flex !important;
-  flex-direction: column;
+.tablet-layout #new-session-modal,
+.tablet-layout #settings-modal,
+.tablet-layout #about-modal,
+.tablet-layout #question-modal,
+.tablet-layout #permission-modal,
+.tablet-layout #zone-info-modal,
+.tablet-layout #text-label-modal,
+.tablet-layout #zone-timeout-modal {
+  align-items: flex-end;
+}
+
+/* Prevent iOS zoom on input focus */
+.tablet-layout .modal-field input,
+.tablet-layout .modal-field textarea,
+.tablet-layout .question-other textarea,
+.tablet-layout .text-label-textarea,
+.tablet-layout .zone-command-input {
+  font-size: 16px;
+}
+
+/* Prompt input */
+.tablet-layout #prompt-container {
+  position: fixed;
+  bottom: var(--mobile-nav-height);
+  left: 0;
+  right: 0;
+  padding: var(--mobile-padding);
+  padding-bottom: calc(var(--mobile-padding) + env(safe-area-inset-bottom));
+  background: rgba(17, 17, 17, 0.98);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 100;
+}
+
+.tablet-layout #prompt-input {
+  font-size: 16px;
+  min-height: 44px;
+  padding: 12px 14px;
+}
+
+.tablet-layout #prompt-submit,
+.tablet-layout #prompt-cancel {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 10px 16px;
 }

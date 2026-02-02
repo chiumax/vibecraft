@@ -159,6 +159,8 @@ export class LayoutManager {
       case 'feed':
         feedPanel?.classList.remove('panel-hidden')
         feedPanel?.classList.add('panel-visible')
+        // Activate sessions tab
+        this.activateFeedTab('sessions')
         break
       case 'scene':
         scenePanel?.classList.remove('panel-hidden')
@@ -169,13 +171,36 @@ export class LayoutManager {
         terminalPanel?.classList.add('panel-visible')
         break
       case 'shell':
-        shellPanel?.classList.remove('panel-hidden')
-        shellPanel?.classList.add('panel-visible')
+        // Show feed panel but activate the shell tab within it
+        feedPanel?.classList.remove('panel-hidden')
+        feedPanel?.classList.add('panel-visible')
+        this.activateFeedTab('shell')
         break
     }
 
     // Callback
     this.callbacks.onViewChange?.(view)
+  }
+
+  /**
+   * Activate a tab within the feed panel (sessions, shell, todos)
+   */
+  private activateFeedTab(tabName: string) {
+    const tabs = document.querySelectorAll('.sessions-tab')
+    const sessionsList = document.getElementById('sessions-list')
+    const shellContent = document.getElementById('shell-tab-content')
+    const todosContent = document.getElementById('todos-tab-content')
+
+    // Update tab buttons
+    tabs.forEach(tab => {
+      const isTarget = (tab as HTMLElement).dataset.tab === tabName
+      tab.classList.toggle('active', isTarget)
+    })
+
+    // Update content visibility
+    sessionsList?.classList.toggle('active', tabName === 'sessions')
+    shellContent?.classList.toggle('active', tabName === 'shell')
+    todosContent?.classList.toggle('active', tabName === 'todos')
   }
 
   /**

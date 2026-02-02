@@ -52,7 +52,7 @@
   height: auto;
   flex: 1;
   min-height: 0;
-  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + var(--keyboard-height, 0px));
   background: #111;
   overflow: hidden;
   display: flex;
@@ -65,10 +65,25 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + var(--keyboard-height, 0px));
   z-index: 60;
   background: #0f172a;
   border: none;
+  display: none;
+  flex-direction: column;
+}
+
+.mobile-layout #terminal-panel.panel-visible {
+  display: flex !important;
+}
+
+.mobile-layout #terminal-panel .terminal-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.mobile-layout #terminal-panel .xterm {
+  height: 100% !important;
 }
 
 

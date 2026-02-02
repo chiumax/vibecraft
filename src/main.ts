@@ -3350,6 +3350,26 @@ function init() {
     }
   })
 
+  // Handle mobile virtual keyboard - adjust layout when keyboard appears
+  if (window.visualViewport) {
+    const updateKeyboardHeight = () => {
+      const keyboardHeight = window.innerHeight - window.visualViewport!.height
+      document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`)
+
+      // Refit terminals when keyboard changes
+      if (keyboardHeight > 0 || keyboardHeight === 0) {
+        state.terminalManager?.refitActive()
+        if (state.activeShellId) {
+          state.shells.get(state.activeShellId)?.fit()
+        }
+      }
+    }
+
+    window.visualViewport.addEventListener('resize', updateKeyboardHeight)
+    window.visualViewport.addEventListener('scroll', updateKeyboardHeight)
+    updateKeyboardHeight()
+  }
+
   console.log('Vibecraft initialized (multi-session enabled)')
 }
 

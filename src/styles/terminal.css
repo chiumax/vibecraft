@@ -105,6 +105,50 @@
   padding: 4px;
 }
 
+/* Prevent text rendering issues */
+.terminal-wrapper .xterm-rows {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fix canvas rendering on mobile */
+.terminal-wrapper canvas {
+  image-rendering: auto;
+}
+
+/* Prevent transforms from causing text glitches */
+.terminal-wrapper .xterm-char-measure-element {
+  position: absolute !important;
+  visibility: hidden !important;
+}
+
+/* Ensure proper text baseline */
+.terminal-wrapper .xterm span {
+  vertical-align: baseline;
+}
+
+/* Mobile-specific terminal fixes */
+@media (max-width: 1023px) {
+  .terminal-wrapper .xterm {
+    font-feature-settings: normal;
+    font-variant-ligatures: none;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .terminal-wrapper .xterm-rows {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Prevent iOS zoom on double tap */
+  .terminal-wrapper {
+    touch-action: manipulation;
+  }
+}
+
 /* Ensure xterm scrolls properly */
 .terminal-wrapper .xterm-viewport::-webkit-scrollbar {
   width: 8px;

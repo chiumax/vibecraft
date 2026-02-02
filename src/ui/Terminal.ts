@@ -24,7 +24,10 @@ export class TerminalUI {
   constructor(options: TerminalOptions) {
     this.container = options.container
 
-    // Create terminal with dark theme
+    // Detect mobile for adjusted settings
+    const isMobile = window.matchMedia('(max-width: 1023px)').matches
+
+    // Create terminal with dark theme and mobile-optimized settings
     this.terminal = new Terminal({
       theme: {
         background: '#0f172a',
@@ -49,13 +52,21 @@ export class TerminalUI {
         brightCyan: '#22d3ee',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", Menlo, monospace',
-      fontSize: 13,
+      // Use system monospace on mobile for better rendering
+      fontFamily: isMobile
+        ? 'ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Mono", monospace'
+        : '"JetBrains Mono", "Fira Code", "SF Mono", Menlo, monospace',
+      fontSize: isMobile ? 14 : 13,  // Slightly larger on mobile
       lineHeight: 1.2,
+      letterSpacing: 0,  // Prevent letter spacing issues
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 5000,
       allowProposedApi: true,
+      // Mobile-specific optimizations
+      smoothScrollDuration: isMobile ? 0 : 125,  // Disable smooth scroll on mobile
+      macOptionIsMeta: true,
+      convertEol: true,  // Handle line endings consistently
     })
 
     // Load fit addon for auto-resizing

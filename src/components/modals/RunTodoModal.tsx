@@ -19,7 +19,15 @@ import {
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
 import { Label } from '../ui/label'
-import type { Todo, ManagedSession } from '@shared/types'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
+import { Loader2, Play } from 'lucide-react'
+import type { Todo } from '@shared/types'
 
 export interface RunTodoModalData {
   todo: Todo
@@ -155,18 +163,21 @@ export function RunTodoModal() {
                 No active sessions. Please start a session first.
               </p>
             ) : (
-              <select
-                id="target-session"
+              <Select
                 value={targetSessionId}
-                onChange={(e) => setTargetSessionId(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                onValueChange={setTargetSessionId}
               >
-                {activeSessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name} ({session.status})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a session" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeSessions.map((session) => (
+                    <SelectItem key={session.id} value={session.id}>
+                      {session.name} ({session.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
 
@@ -204,7 +215,17 @@ export function RunTodoModal() {
             onClick={handleRun}
             disabled={isSubmitting || activeSessions.length === 0}
           >
-            {isSubmitting ? 'Running...' : 'Run'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Running...
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Run
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

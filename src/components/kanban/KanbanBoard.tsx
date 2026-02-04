@@ -16,11 +16,29 @@ import {
 import { useTodosStore } from '../../stores/todosStore'
 import { useAppStore, showAppModal } from '../../stores'
 import { ZONE_COLORS } from '../../scene/WorkshopScene'
-import type { Todo, TodoStatus, ManagedSession } from '@shared/types'
+import type { Todo, TodoStatus } from '@shared/types'
 import { KanbanHeader } from './KanbanHeader'
 import { KanbanColumn, COLUMN_CONFIGS } from './KanbanColumn'
 import { KanbanCardPlaceholder } from './KanbanCard'
 import { PlannerPanel } from '../planner'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../ui/dialog'
+import { Button } from '../ui/button'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
+import { Plus } from 'lucide-react'
 
 interface KanbanBoardProps {
   /** API URL for server requests */
@@ -231,65 +249,55 @@ export function KanbanBoard({ apiUrl = '/api', onSendPrompt }: KanbanBoardProps)
       </DndContext>
 
       {/* Add Todo Modal */}
-      {showAddModal && (
-        <div className="kanban-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="kanban-modal" onClick={e => e.stopPropagation()}>
-            <div className="kanban-modal-header">
-              <h3>Add Todo</h3>
-              <button
-                className="kanban-modal-close"
-                onClick={() => setShowAddModal(false)}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Add Todo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="workspace">Workspace</Label>
+              <Select
+                value={newTodoSessionId}
+                onValueChange={setNewTodoSessionId}
               >
-                ×
-              </button>
-            </div>
-            <div className="kanban-modal-body">
-              <div className="kanban-modal-field">
-                <label>Workspace</label>
-                <select
-                  value={newTodoSessionId}
-                  onChange={e => setNewTodoSessionId(e.target.value)}
-                >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select workspace" />
+                </SelectTrigger>
+                <SelectContent>
                   {managedSessions.map(session => (
-                    <option key={session.id} value={session.id}>
+                    <SelectItem key={session.id} value={session.id}>
                       {session.name}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div className="kanban-modal-field">
-                <label>Todo</label>
-                <input
-                  type="text"
-                  value={newTodoText}
-                  onChange={e => setNewTodoText(e.target.value)}
-                  placeholder="What needs to be done?"
-                  autoFocus
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleAddTodo()
-                    if (e.key === 'Escape') setShowAddModal(false)
-                  }}
-                />
-              </div>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="kanban-modal-actions">
-              <button
-                className="kanban-modal-cancel"
-                onClick={() => setShowAddModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="kanban-modal-add"
-                onClick={handleAddTodo}
-                disabled={!newTodoText.trim()}
-              >
-                Add Todo
-              </button>
+            <div className="space-y-2">
+              <Label htmlFor="todo-text">Todo</Label>
+              <Input
+                id="todo-text"
+                value={newTodoText}
+                onChange={e => setNewTodoText(e.target.value)}
+                placeholder="What needs to be done?"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newTodoText.trim()) handleAddTodo()
+                }}
+              />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddTodo} disabled={!newTodoText.trim()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Todo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

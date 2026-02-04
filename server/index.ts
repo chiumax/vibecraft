@@ -33,12 +33,14 @@ import type {
   TextTile,
   CreateTextTileRequest,
   UpdateTextTileRequest,
+  TranscriptContent,
 } from '../shared/types.js'
 import { DEFAULTS } from '../shared/defaults.js'
 import { GitStatusManager } from './GitStatusManager.js'
 import { ProjectsManager } from './ProjectsManager.js'
 import { SessionStatsManager } from './SessionStatsManager.js'
 import { ptyManager } from './PtyManager.js'
+import { TranscriptWatcher } from './TranscriptWatcher.js'
 import { fileURLToPath } from 'url'
 
 // ============================================================================
@@ -349,6 +351,9 @@ const projectsManager = new ProjectsManager()
 
 /** Session stats and achievements tracker */
 const sessionStatsManager = new SessionStatsManager(STATS_FILE)
+
+/** Transcript watcher for real-time Claude output streaming */
+const transcriptWatcher = new TranscriptWatcher({ debug: DEBUG })
 
 /** Active voice transcription sessions (WebSocket client → Deepgram connection) */
 const voiceSessions = new Map<WebSocket, LiveClient>()
@@ -1529,6 +1534,16 @@ function addEvent(event: ClaudeEvent) {
     case 'session_end':
       sessionStatsManager.trackStop(event.sessionId, true)
       break
+  }
+
+  // Start/stop transcript watcher based on events
+  if (event.transcriptPath && !transcriptWatcher.isWatching(event.sessionId)) {
+    debug(`Starting transcript watcher for session ${event.sessionId}`)
+    transcriptWatcher.watch(event.sessionId, event.transcriptPath)
+  }
+  if (event.type === 'session_end') {
+    debug(`Stopping transcript watcher for session ${event.sessionId}`)
+    transcriptWatcher.unwatch(event.sessionId)
   }
 
   // Update managed session status based on event
@@ -2744,6 +2759,12 @@ function main() {
 
   // Watch for new events
   watchEventsFile()
+
+  // Set up transcript watcher to broadcast Claude's output
+  transcriptWatcher.on('content', (content: TranscriptContent) => {
+    debug(`Transcript content for ${content.sessionId}: ${content.type}`)
+    broadcast({ type: 'transcript', payload: content })
+  })
 
   // Create HTTP server
   const httpServer = createServer(handleHttpRequest)

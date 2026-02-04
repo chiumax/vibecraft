@@ -8,7 +8,7 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { readFileSync, statSync, existsSync } from 'fs'
 import { EventEmitter } from 'events'
-import type { TranscriptContent } from '../shared/types'
+import type { TranscriptContent } from '../shared/types.js'
 
 // ============================================================================
 // Types

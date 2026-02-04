@@ -216,9 +216,11 @@ case "$event_type" in
     stop_hook_active=$(echo "$input" | "$JQ" -r '.stop_hook_active // false')
 
     # Try to extract latest assistant response from transcript
+    # Small delay to ensure transcript is fully written
+    sleep 0.1
     assistant_response=""
     if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-      assistant_response=$(tail -200 "$transcript_path" | \
+      assistant_response=$(tail -500 "$transcript_path" | \
         "$JQ" -rs '[.[] | select(.type == "assistant") | select(.message.content | map(select(.type == "text")) | length > 0)] | last | .message.content | map(select(.type == "text")) | map(.text) | join("\n")' 2>/dev/null || echo "")
     fi
 

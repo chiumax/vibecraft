@@ -52,6 +52,8 @@ export interface BaseEvent {
   sessionId: string
   /** Current working directory */
   cwd: string
+  /** Path to transcript JSONL file (for TranscriptWatcher) */
+  transcriptPath?: string
 }
 
 // ============================================================================
@@ -154,6 +156,15 @@ export interface PermissionOption {
   label: string    // "Yes", "Yes, and always allow...", "No"
 }
 
+/** Transcript content block */
+export interface TranscriptContent {
+  sessionId: string
+  type: 'text' | 'tool_use' | 'tool_result' | 'thinking'
+  content: string
+  metadata?: Record<string, unknown>
+  timestamp: number
+}
+
 /** Server -> Client messages */
 export type ServerMessage =
   | { type: 'event'; payload: ClaudeEvent }
@@ -173,6 +184,8 @@ export type ServerMessage =
   | { type: 'pty:exit'; sessionId: string; exitCode: number }
   // Shell management
   | { type: 'shell:list'; payload: { id: string; cwd: string }[] }
+  // Transcript watcher
+  | { type: 'transcript'; payload: TranscriptContent }
 
 /** Client -> Server messages */
 export type ClientMessage =

@@ -91,6 +91,7 @@ input=$(cat)
 hook_event_name=$(echo "$input" | "$JQ" -r '.hook_event_name // "unknown"')
 session_id=$(echo "$input" | "$JQ" -r '.session_id // "unknown"')
 cwd=$(echo "$input" | "$JQ" -r '.cwd // ""')
+transcript_path=$(echo "$input" | "$JQ" -r '.transcript_path // ""')
 
 # Generate unique event ID and timestamp
 # macOS doesn't support date +%N, so we use different approaches
@@ -137,7 +138,6 @@ case "$event_type" in
     tool_name=$(echo "$input" | "$JQ" -r '.tool_name // "unknown"')
     tool_input=$(echo "$input" | "$JQ" -c '.tool_input // {}')
     tool_use_id=$(echo "$input" | "$JQ" -r '.tool_use_id // ""')
-    transcript_path=$(echo "$input" | "$JQ" -r '.transcript_path // ""')
 
     # Try to extract assistant text that came just before this tool call
     assistant_text=""
@@ -163,6 +163,7 @@ case "$event_type" in
       --argjson toolInput "$tool_input" \
       --arg toolUseId "$tool_use_id" \
       --arg assistantText "$assistant_text" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
@@ -172,7 +173,8 @@ case "$event_type" in
         tool: $tool,
         toolInput: $toolInput,
         toolUseId: $toolUseId,
-        assistantText: $assistantText
+        assistantText: $assistantText,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
@@ -194,6 +196,7 @@ case "$event_type" in
       --argjson toolResponse "$tool_response" \
       --arg toolUseId "$tool_use_id" \
       --argjson success "$success" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
@@ -204,13 +207,13 @@ case "$event_type" in
         toolInput: $toolInput,
         toolResponse: $toolResponse,
         toolUseId: $toolUseId,
-        success: $success
+        success: $success,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
   stop|subagent_stop)
     stop_hook_active=$(echo "$input" | "$JQ" -r '.stop_hook_active // false')
-    transcript_path=$(echo "$input" | "$JQ" -r '.transcript_path // ""')
 
     # Try to extract latest assistant response from transcript
     assistant_response=""
@@ -227,6 +230,7 @@ case "$event_type" in
       --arg cwd "$cwd" \
       --argjson stopHookActive "$stop_hook_active" \
       --arg response "$assistant_response" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
@@ -234,7 +238,8 @@ case "$event_type" in
         sessionId: $sessionId,
         cwd: $cwd,
         stopHookActive: $stopHookActive,
-        response: $response
+        response: $response,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
@@ -248,13 +253,15 @@ case "$event_type" in
       --arg sessionId "$session_id" \
       --arg cwd "$cwd" \
       --arg source "$source_type" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
         type: $type,
         sessionId: $sessionId,
         cwd: $cwd,
-        source: $source
+        source: $source,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
@@ -268,13 +275,15 @@ case "$event_type" in
       --arg sessionId "$session_id" \
       --arg cwd "$cwd" \
       --arg reason "$reason" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
         type: $type,
         sessionId: $sessionId,
         cwd: $cwd,
-        reason: $reason
+        reason: $reason,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
@@ -288,13 +297,15 @@ case "$event_type" in
       --arg sessionId "$session_id" \
       --arg cwd "$cwd" \
       --arg prompt "$prompt" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
         type: $type,
         sessionId: $sessionId,
         cwd: $cwd,
-        prompt: $prompt
+        prompt: $prompt,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
@@ -310,6 +321,7 @@ case "$event_type" in
       --arg cwd "$cwd" \
       --arg message "$message" \
       --arg notificationType "$notification_type" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
@@ -317,7 +329,8 @@ case "$event_type" in
         sessionId: $sessionId,
         cwd: $cwd,
         message: $message,
-        notificationType: $notificationType
+        notificationType: $notificationType,
+        transcriptPath: $transcriptPath
       }')
     ;;
 
@@ -333,6 +346,7 @@ case "$event_type" in
       --arg cwd "$cwd" \
       --arg trigger "$trigger" \
       --arg customInstructions "$custom_instructions" \
+      --arg transcriptPath "$transcript_path" \
       '{
         id: $id,
         timestamp: $timestamp,
@@ -340,7 +354,8 @@ case "$event_type" in
         sessionId: $sessionId,
         cwd: $cwd,
         trigger: $trigger,
-        customInstructions: $customInstructions
+        customInstructions: $customInstructions,
+        transcriptPath: $transcriptPath
       }')
     ;;
 

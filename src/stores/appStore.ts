@@ -13,7 +13,7 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { ClaudeEvent, ManagedSession } from '@shared/types'
+import type { ClaudeEvent, ManagedSession, TranscriptContent } from '@shared/types'
 import type { WorkshopScene, Zone } from '../scene/WorkshopScene'
 import type { Claude } from '../entities/ClaudeMon'
 import type { SubagentManager } from '../entities/SubagentManager'
@@ -80,6 +80,9 @@ interface RuntimeState {
 
   // Event history
   eventHistory: ClaudeEvent[]
+
+  // Transcript content (Claude's output from transcript watcher)
+  transcriptContent: TranscriptContent[]
 
   // Server info
   serverCwd: string
@@ -160,6 +163,10 @@ interface Actions {
   addEvent: (event: ClaudeEvent) => void
   setEventHistory: (events: ClaudeEvent[]) => void
 
+  // Transcript content
+  addTranscriptContent: (content: TranscriptContent) => void
+  clearTranscriptContent: (sessionId?: string) => void
+
   // Server
   setServerCwd: (cwd: string) => void
 
@@ -221,6 +228,7 @@ const initialRuntimeState: RuntimeState = {
   focusedSessionId: null,
   selectedManagedSession: null,
   eventHistory: [],
+  transcriptContent: [],
   serverCwd: '~',
   attentionSystem: null,
   attentionVersion: 0,
@@ -305,6 +313,18 @@ export const useAppStore = create<AppStore>()(
         })),
 
       setEventHistory: (eventHistory) => set({ eventHistory }),
+
+      // Transcript content actions
+      addTranscriptContent: (content) =>
+        set((state) => ({
+          transcriptContent: [...state.transcriptContent, content].slice(-500), // Keep last 500 entries
+        })),
+      clearTranscriptContent: (sessionId) =>
+        set((state) => ({
+          transcriptContent: sessionId
+            ? state.transcriptContent.filter((c) => c.sessionId !== sessionId)
+            : [],
+        })),
 
       // Server actions
       setServerCwd: (serverCwd) => set({ serverCwd }),

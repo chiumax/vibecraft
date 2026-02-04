@@ -2,7 +2,7 @@
  * EventClient - WebSocket client for receiving Claude Code events
  */
 
-import type { ClaudeEvent, ServerMessage, ClientMessage, ManagedSession } from '../../shared/types'
+import type { ClaudeEvent, ServerMessage, ClientMessage, ManagedSession, TranscriptContent } from '../../shared/types'
 
 export type EventHandler = (event: ClaudeEvent) => void
 export type HistoryHandler = (events: ClaudeEvent[]) => void
@@ -10,6 +10,7 @@ export type ConnectionHandler = (connected: boolean) => void
 export type TokensHandler = (data: { session: string; current: number; cumulative: number }) => void
 export type SessionsHandler = (sessions: ManagedSession[]) => void
 export type SessionUpdateHandler = (session: ManagedSession) => void
+export type TranscriptHandler = (content: TranscriptContent) => void
 export type RawMessageHandler = (data: { type: string; payload?: unknown }) => void
 
 export interface EventClientOptions {
@@ -28,6 +29,7 @@ export class EventClient {
   private tokensHandlers: Set<TokensHandler> = new Set()
   private sessionsHandlers: Set<SessionsHandler> = new Set()
   private sessionUpdateHandlers: Set<SessionUpdateHandler> = new Set()
+  private transcriptHandlers: Set<TranscriptHandler> = new Set()
   private rawMessageHandlers: Set<RawMessageHandler> = new Set()
   private reconnectAttempts = 0
   private reconnectTimeout: number | null = null
@@ -199,6 +201,11 @@ export class EventClient {
         this.log('Pong received')
         break
 
+      case 'transcript':
+        this.log('Transcript:', message.payload.type)
+        this.notifyTranscriptHandlers(message.payload)
+        break
+
       default:
         // Pass unknown message types to raw message handlers
         this.notifyRawMessageHandlers(message as { type: string; payload?: unknown })
@@ -244,6 +251,12 @@ export class EventClient {
   onSessionUpdate(handler: SessionUpdateHandler): () => void {
     this.sessionUpdateHandlers.add(handler)
     return () => this.sessionUpdateHandlers.delete(handler)
+  }
+
+  /** Handle transcript content (Claude's output parsed from transcript file) */
+  onTranscript(handler: TranscriptHandler): () => void {
+    this.transcriptHandlers.add(handler)
+    return () => this.transcriptHandlers.delete(handler)
   }
 
   /** Handle raw messages that aren't standard event types (e.g., voice transcripts) */
@@ -308,6 +321,16 @@ export class EventClient {
         handler(session)
       } catch (e) {
         console.error('Session update handler error:', e)
+      }
+    }
+  }
+
+  private notifyTranscriptHandlers(content: TranscriptContent): void {
+    for (const handler of this.transcriptHandlers) {
+      try {
+        handler(content)
+      } catch (e) {
+        console.error('Transcript handler error:', e)
       }
     }
   }

@@ -43,6 +43,7 @@ import {
   showPermissionModalFromEvent,
   showZoneInfoModalFromEvent,
   showZoneCommandModalFromEvent,
+  useAppStore,
 } from './stores'
 // Removed: SlashCommands (no longer needed without prompt form)
 import { drawMode } from './ui/DrawMode'
@@ -2330,6 +2331,19 @@ function init() {
           state.terminalManager.handleMessage(ptyMessage)
         }
       }
+    }
+  })
+
+  // Handle transcript content (Claude's output from transcript watcher)
+  state.client.onTranscript((content) => {
+    // Add to store for display
+    useAppStore.getState().addTranscriptContent(content)
+
+    // Debug logging
+    if (content.type === 'text') {
+      console.log(`[Transcript ${content.sessionId}] ${content.content.slice(0, 100)}...`)
+    } else {
+      console.log(`[Transcript ${content.sessionId}] ${content.type}: ${content.content}`)
     }
   })
 

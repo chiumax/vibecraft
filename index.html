@@ -203,7 +203,14 @@
                 </div>
                 <div id="shell-terminals"></div>
               </div>
-              <div id="todos-tab-content" class="tab-content"></div>
+              <div id="todos-tab-content" class="tab-content">
+                <div id="todos-view-toggle">
+                  <button class="todos-view-btn active" data-view="list">List</button>
+                  <button class="todos-view-btn" data-view="board">Board</button>
+                </div>
+                <div id="todos-list-view"></div>
+                <div id="todos-board-view" class="hidden"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -300,7 +307,14 @@
                 </div>
                 <div id="shell-terminals"></div>
               </div>
-              <div id="todos-tab-content" class="tab-content"></div>
+              <div id="todos-tab-content" class="tab-content">
+                <div id="todos-view-toggle">
+                  <button class="todos-view-btn active" data-view="list">List</button>
+                  <button class="todos-view-btn" data-view="board">Board</button>
+                </div>
+                <div id="todos-list-view"></div>
+                <div id="todos-board-view" class="hidden"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -417,7 +431,14 @@
                 </div>
                 <div id="shell-terminals"></div>
               </div>
-              <div id="todos-tab-content" class="tab-content"></div>
+              <div id="todos-tab-content" class="tab-content">
+                <div id="todos-view-toggle">
+                  <button class="todos-view-btn active" data-view="list">List</button>
+                  <button class="todos-view-btn" data-view="board">Board</button>
+                </div>
+                <div id="todos-list-view"></div>
+                <div id="todos-board-view" class="hidden"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -779,6 +800,9 @@
 
     <!-- Toast notifications -->
     <div id="toast-container"></div>
+
+    <!-- React Root (for gradual migration) -->
+    <div id="react-root"></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

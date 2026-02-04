@@ -194,14 +194,13 @@ export class PtyManager {
 
     session.clients.add(ws)
 
-    // Send buffered output so client sees history
-    if (session.buffer.length > 0) {
-      ws.send(JSON.stringify({
-        type: 'pty:buffer',
-        sessionId,
-        data: session.buffer.join(''),
-      }))
-    }
+    // Always send buffer message (even if empty) to confirm subscription succeeded
+    // This allows the client to remove the "Connecting to terminal..." overlay
+    ws.send(JSON.stringify({
+      type: 'pty:buffer',
+      sessionId,
+      data: session.buffer.join(''),
+    }))
 
     return true
   }
@@ -405,14 +404,13 @@ export class PtyManager {
 
     session.clients.add(ws)
 
-    // Send buffered output so client sees history
-    if (session.buffer.length > 0) {
-      ws.send(JSON.stringify({
-        type: 'pty:buffer',
-        sessionId,
-        data: session.buffer.join(''),
-      }))
-    }
+    // Always send buffer message (even if empty) to confirm subscription succeeded
+    // This allows the client to remove the "Connecting to terminal..." overlay
+    ws.send(JSON.stringify({
+      type: 'pty:buffer',
+      sessionId,
+      data: session.buffer.join(''),
+    }))
 
     return true
   }

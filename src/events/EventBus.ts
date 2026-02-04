@@ -24,7 +24,6 @@ import type {
   UserPromptSubmitEvent,
 } from '../../shared/types'
 import type { WorkshopScene } from '../scene/WorkshopScene'
-import type { TimelineManager } from '../ui/TimelineManager'
 
 // ============================================================================
 // Types
@@ -34,8 +33,6 @@ import type { TimelineManager } from '../ui/TimelineManager'
 export interface EventContext {
   /** The workshop scene */
   scene: WorkshopScene | null
-  /** Timeline manager */
-  timelineManager: TimelineManager | null
   /** Session state for the event's session */
   session: SessionContext | null
   /** Sound enabled flag */

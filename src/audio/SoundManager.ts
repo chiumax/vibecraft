@@ -18,6 +18,7 @@
 
 import * as Tone from 'tone'
 import { spatialAudioContext, type SpatialSource, type SpatialMode } from './SpatialAudioContext'
+import { SOUND_PACKS, type SoundPackId } from './SoundPacks'
 
 // ============================================
 // Volume Levels (dB)
@@ -160,6 +161,12 @@ class SoundManager {
   private enabled = true
   private volume = 0.7 // 0-1 (maps to master gain)
 
+  // Sound pack support
+  private currentPack: SoundPackId = 'synth'
+  private audioCache: Map<string, HTMLAudioElement> = new Map()
+  private readonly AUDIO_POOL_SIZE = 8
+  private audioPool: HTMLAudioElement[] = []
+
   // Synth pools by oscillator type (reduces GC)
   private synthPools: Map<OscType, Tone.Synth[]> = new Map([
     ['sine', []],
@@ -232,6 +239,73 @@ class SoundManager {
   }
 
   // ============================================
+  // Sound Pack Support
+  // ============================================
+
+  /**
+   * Set the active sound pack
+   */
+  setSoundPack(packId: SoundPackId): void {
+    this.currentPack = packId
+    console.log(`[SoundManager] Sound pack set to: ${packId}`)
+  }
+
+  /**
+   * Get the current sound pack ID
+   */
+  getSoundPack(): SoundPackId {
+    return this.currentPack
+  }
+
+  /**
+   * Play a WAV file from the current sound pack
+   * Returns true if a pack sound was played, false to fall back to synth
+   */
+  private playPackSound(name: SoundName): boolean {
+    if (this.currentPack === 'synth') return false
+
+    const pack = SOUND_PACKS[this.currentPack]
+    const soundPath = pack?.sounds[name]
+    if (!soundPath) return false
+
+    // Get or create audio element
+    let audio = this.audioCache.get(soundPath)
+    if (!audio) {
+      audio = new Audio(soundPath)
+      audio.preload = 'auto'
+      this.audioCache.set(soundPath, audio)
+    }
+
+    // Clone for overlapping playback
+    const clone = audio.cloneNode() as HTMLAudioElement
+    clone.volume = this.volume * this.currentSpatialVolume
+    clone.play().catch(() => {
+      // Ignore playback errors (e.g., user hasn't interacted yet)
+    })
+
+    return true
+  }
+
+  /**
+   * Preload sounds for the current pack
+   */
+  preloadPack(): void {
+    if (this.currentPack === 'synth') return
+
+    const pack = SOUND_PACKS[this.currentPack]
+    if (!pack) return
+
+    for (const soundPath of Object.values(pack.sounds)) {
+      if (soundPath && !this.audioCache.has(soundPath)) {
+        const audio = new Audio(soundPath)
+        audio.preload = 'auto'
+        this.audioCache.set(soundPath, audio)
+      }
+    }
+    console.log(`[SoundManager] Preloaded ${Object.keys(pack.sounds).length} sounds for pack: ${this.currentPack}`)
+  }
+
+  // ============================================
   // Spatial Audio Configuration
   // ============================================
 
@@ -282,12 +356,6 @@ class SoundManager {
   play(name: SoundName, options?: SoundPlayOptions): void {
     if (!this.initialized || !this.enabled) return
 
-    const soundFn = this.sounds[name]
-    if (!soundFn) {
-      console.warn(`[SoundManager] Unknown sound: ${name}`)
-      return
-    }
-
     // Determine spatial mode for this sound
     const spatialMode = SOUND_SPATIAL_MODE[name] || 'global'
 
@@ -301,7 +369,19 @@ class SoundManager {
       this.currentSpatialVolume = 1
     }
 
-    // Play the sound
+    // Try to play from sound pack first
+    if (this.playPackSound(name)) {
+      this.currentSpatialVolume = 1
+      return
+    }
+
+    // Fall back to synthesized sound
+    const soundFn = this.sounds[name]
+    if (!soundFn) {
+      console.warn(`[SoundManager] Unknown sound: ${name}`)
+      return
+    }
+
     soundFn()
 
     // Reset for next sound

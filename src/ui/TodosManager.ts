@@ -3,19 +3,47 @@
  *
  * Stores todos on the server (file-based), with backwards compatibility
  * for migrating existing localStorage data.
+ *
+ * Note: This is the legacy vanilla TS implementation. New code should use
+ * the React KanbanBoard component with useTodosStore hook instead.
  */
 
-export interface Todo {
-  id: string
-  text: string
-  completed: boolean
-  createdAt: number
+import type { Todo, TodoStatus, SessionTodos } from '@shared/types'
+
+export type { Todo, TodoStatus, SessionTodos }
+
+/**
+ * Migrate a todo from old format (completed only) to new format (with status)
+ */
+function migrateTodo(todo: Partial<Todo> & { id: string; text: string; createdAt: number }): Todo {
+  // If status exists, use it
+  if (todo.status) {
+    return {
+      ...todo,
+      completed: todo.status === 'done',
+      status: todo.status,
+    } as Todo
+  }
+
+  // Derive status from completed field
+  const completed = todo.completed ?? false
+  return {
+    id: todo.id,
+    text: todo.text,
+    completed,
+    status: completed ? 'done' : 'todo',
+    createdAt: todo.createdAt,
+  }
 }
 
-export interface SessionTodos {
-  sessionId: string
-  sessionName: string
-  todos: Todo[]
+/**
+ * Migrate all todos in a session
+ */
+function migrateSessionTodos(session: SessionTodos): SessionTodos {
+  return {
+    ...session,
+    todos: session.todos.map(migrateTodo),
+  }
 }
 
 const LEGACY_STORAGE_KEY = 'vibecraft-todos'
@@ -82,7 +110,9 @@ export class TodosManager {
       if (response.ok) {
         const data = await response.json()
         if (data.ok && Array.isArray(data.todos)) {
-          this.todos = new Map(data.todos.map((st: SessionTodos) => [st.sessionId, st]))
+          // Migrate todos to new format if needed
+          const migrated = data.todos.map(migrateSessionTodos)
+          this.todos = new Map(migrated.map((st: SessionTodos) => [st.sessionId, st]))
         }
       }
       this.isLoaded = true
@@ -159,7 +189,7 @@ export class TodosManager {
   /**
    * Add a todo to a session
    */
-  addTodo(sessionId: string, sessionName: string, text: string): Todo {
+  addTodo(sessionId: string, sessionName: string, text: string, status: TodoStatus = 'todo'): Todo {
     let sessionTodos = this.todos.get(sessionId)
     if (!sessionTodos) {
       sessionTodos = { sessionId, sessionName, todos: [] }
@@ -169,7 +199,8 @@ export class TodosManager {
     const todo: Todo = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text,
-      completed: false,
+      completed: status === 'done',
+      status,
       createdAt: Date.now(),
     }
 
@@ -190,6 +221,24 @@ export class TodosManager {
     const todo = sessionTodos.todos.find(t => t.id === todoId)
     if (todo) {
       todo.completed = !todo.completed
+      // Keep status in sync with completed
+      todo.status = todo.completed ? 'done' : 'todo'
+      this.save()
+      this.render()
+    }
+  }
+
+  /**
+   * Update todo status (for kanban drag-and-drop)
+   */
+  updateTodoStatus(sessionId: string, todoId: string, status: TodoStatus) {
+    const sessionTodos = this.todos.get(sessionId)
+    if (!sessionTodos) return
+
+    const todo = sessionTodos.todos.find(t => t.id === todoId)
+    if (todo) {
+      todo.status = status
+      todo.completed = status === 'done'
       this.save()
       this.render()
     }

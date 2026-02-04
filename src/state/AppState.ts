@@ -11,7 +11,7 @@ import type { SubagentManager } from '../entities/SubagentManager'
 import type { EventClient } from '../events/EventClient'
 import type { ClaudeEvent, ManagedSession } from '../../shared/types'
 import type { AttentionSystem } from '../systems/AttentionSystem'
-import type { TimelineManager } from '../ui/TimelineManager'
+// TimelineManager removed - now handled by React
 import type { TerminalManager, TerminalUI } from '../ui/Terminal'
 import type { VoiceState } from '../ui/VoiceControl'
 
@@ -42,7 +42,6 @@ export interface AppState {
   selectedManagedSession: string | null  // Selected managed session ID for prompts
   serverCwd: string  // Server's working directory
   attentionSystem: AttentionSystem | null  // Manages attention queue and notifications
-  timelineManager: TimelineManager | null  // Manages icon timeline
   terminalManager: TerminalManager | null  // Manages PTY terminal sessions
   shells: Map<string, TerminalUI>  // Multiple standalone shell terminals
   activeShellId: string | null  // Currently active shell ID
@@ -68,7 +67,6 @@ export const state: AppState = {
   managedSessions: [],
   selectedManagedSession: null,
   attentionSystem: null,  // Initialized in init()
-  timelineManager: null,  // Initialized in init()
   terminalManager: null,  // Initialized in init()
   shells: new Map(),  // Shell terminals
   activeShellId: null,

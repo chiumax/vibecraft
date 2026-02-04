@@ -308,11 +308,13 @@
   overflow: visible;
 }
 
+/* Container for React SessionsPanel portal */
 #managed-sessions {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 6px;
-  max-height: 200px;
+  display: flex;
+  flex-direction: column;
+  height: 10vh;
+  min-height: 80px;
+  max-height: 150px;
   overflow-y: auto;
   flex-shrink: 0;
 }

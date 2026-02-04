@@ -21,44 +21,32 @@ import {
   type PostToolUseEvent,
   type ManagedSession,
 } from '../shared/types'
-import { soundManager } from './audio'
+import { soundManager, initAudioOnInteraction } from './audio'
 
 // Expose for console testing (can remove in production)
 ;(window as any).soundManager = soundManager
 import { setupVoiceControl, type VoiceState } from './ui/VoiceControl'
 import { getToolIcon } from './utils/ToolUtils'
 import { AttentionSystem } from './systems/AttentionSystem'
-import { TimelineManager } from './ui/TimelineManager'
-import { formatTokens, formatTimeAgo, escapeHtml } from './ui/FeedManager'
-import { ContextMenu, type ContextMenuContext } from './ui/ContextMenu'
+// TimelineManager now handled by React component
+import { formatTokens, formatTimeAgo, escapeHtml } from './utils/formatters'
+import { contextMenu, type ContextMenuContext } from './components/ui/context-menu'
 import { setupKeyboardShortcuts, getSessionKeybind } from './ui/KeyboardShortcuts'
-import { setupKeybindSettings, updateVoiceHint } from './ui/KeybindSettings'
+import { toast } from './components/ui/toast'
+// React modals - use store helpers
 import {
-  setupQuestionModal,
-  showQuestionModal,
-  hideQuestionModal,
-  type QuestionData,
-} from './ui/QuestionModal'
-import { toast } from './ui/Toast'
-import {
-  setupZoneInfoModal,
-  showZoneInfoModal,
-  setZoneInfoSoundEnabled,
-} from './ui/ZoneInfoModal'
-import {
-  setupZoneCommandModal,
-  showZoneCommandModal,
-} from './ui/ZoneCommandModal'
-import {
-  setupPermissionModal,
-  showPermissionModal,
-  hidePermissionModal,
-} from './ui/PermissionModal'
+  showAppModal,
+  hideAppModal,
+  getAppState,
+  showTextLabelModalAsync,
+  showQuestionModalFromEvent,
+  showPermissionModalFromEvent,
+  showZoneInfoModalFromEvent,
+  showZoneCommandModalFromEvent,
+} from './stores'
 // Removed: SlashCommands (no longer needed without prompt form)
-import { setupDirectoryAutocomplete } from './ui/DirectoryAutocomplete'
-import { checkForUpdates } from './ui/VersionChecker'
 import { drawMode } from './ui/DrawMode'
-import { setupTextLabelModal, showTextLabelModal } from './ui/TextLabelModal'
+// TextLabelModal is now React - using showTextLabelModalAsync from stores
 import { createSessionAPI, type SessionAPI } from './api'
 import { TerminalManager, TerminalUI } from './ui/Terminal'
 import { initLayoutManager, getLayoutManager, type LayoutType } from './ui/LayoutManager'
@@ -75,16 +63,8 @@ import {
   handleShellMessage,
   resubscribeShells,
 } from './ui/ShellManager'
-import { initAudioOnInteraction, setupSettingsModal } from './ui/SettingsModal'
-import {
-  setupAboutModal,
-  setupNotConnectedOverlay,
-  showOfflineBanner,
-  setupZoneTimeoutModal,
-  showZoneTimeoutModal,
-  showNotConnectedOverlay,
-  hideNotConnectedOverlay,
-} from './ui/ConnectionUI'
+// SettingsModal is now React - initAudioOnInteraction moved to audio/index.ts
+// Connection UI now handled by React components (ConnectionOverlay, OfflineBanner)
 import {
   state,
   pendingZoneHints,
@@ -94,6 +74,11 @@ import {
   type SessionState,
   type AppState,
 } from './state'
+
+// React imports for gradual migration
+import { createRoot } from 'react-dom/client'
+import { createElement } from 'react'
+import { App } from './App'
 
 // ============================================================================
 // Configuration
@@ -136,135 +121,8 @@ const sessionAPI = createSessionAPI(API_URL)
 /**
  * Render the managed sessions list
  */
-function renderManagedSessions(): void {
-  const container = document.getElementById('managed-sessions')
-  if (!container) return
-
-  container.innerHTML = ''
-
-  state.managedSessions.forEach((session, index) => {
-    const el = document.createElement('div')
-    el.className = 'session-item'
-    if (session.id === state.selectedManagedSession) {
-      el.classList.add('active')
-    }
-
-    // Check if session needs attention
-    const needsAttention = state.attentionSystem?.needsAttention(session.id) ?? false
-    if (needsAttention) {
-      el.classList.add('needs-attention')
-    }
-
-    const statusClass = session.status
-    const hotkey = index < 6 ? getSessionKeybind(index) : '' // 1-6 shown in UI
-
-    // Time since last activity (needed for detail line)
-    const lastActive = session.lastActivity
-      ? formatTimeAgo(session.lastActivity)
-      : ''
-
-    // Build detail line with status and project
-    const projectName = session.cwd ? session.cwd.split('/').pop() : ''
-    let detail = ''
-    if (needsAttention) {
-      detail = '⚡ Needs attention'
-    } else if (session.status === 'waiting') {
-      detail = `⏳ Waiting for permission: ${session.currentTool || 'Unknown'}`
-    } else if (session.currentTool) {
-      detail = `Using ${session.currentTool}`
-    } else if (session.status === 'offline') {
-      detail = lastActive ? `Offline · was ${lastActive}` : 'Offline - click 🔄 to restart'
-    } else if (session.status === 'dismissed') {
-      detail = '💤 Dismissed - click ▶️ to reactivate'
-    } else {
-      detail = projectName ? `📁 ${projectName}` : 'Ready'
-    }
-    const detailClass = session.status === 'working' ? 'session-detail working'
-      : session.status === 'waiting' ? 'session-detail attention'
-      : needsAttention ? 'session-detail attention'
-      : session.status === 'dismissed' ? 'session-detail dismissed'
-      : 'session-detail'
-
-    // Get last prompt for this session (via claudeSessionId)
-    const lastPrompt = session.claudeSessionId ? state.lastPrompts.get(session.claudeSessionId) : null
-    const truncatedPrompt = lastPrompt
-      ? (lastPrompt.length > 35 ? lastPrompt.slice(0, 32) + '...' : lastPrompt)
-      : null
-
-    // Build detailed tooltip
-    const tooltipParts = [
-      `Name: ${session.name}`,
-      `Status: ${session.status}`,
-      `tmux: ${session.tmuxSession}`,
-      session.claudeSessionId ? `Claude ID: ${session.claudeSessionId.slice(0, 12)}...` : 'Not linked yet',
-      session.cwd ? `Dir: ${session.cwd}` : '',
-      session.lastActivity ? `Last active: ${new Date(session.lastActivity).toLocaleString()}` : '',
-      lastPrompt ? `Last prompt: ${lastPrompt}` : '',
-    ].filter(Boolean)
-    el.title = tooltipParts.join('\n')
-
-    el.innerHTML = `
-      ${hotkey ? `<div class="session-hotkey">${hotkey}</div>` : ''}
-      <div class="session-status ${statusClass}"></div>
-      <div class="session-info">
-        <div class="session-name">${escapeHtml(session.name)}</div>
-        <div class="${detailClass}">${detail}${!needsAttention && session.status !== 'offline' && session.status !== 'dismissed' && lastActive ? ` · ${lastActive}` : ''}</div>
-        ${truncatedPrompt ? `<div class="session-prompt">💬 ${escapeHtml(truncatedPrompt)}</div>` : ''}
-      </div>
-      <div class="session-actions">
-        ${session.status === 'offline' ? `<button class="restart-btn" title="Restart session">🔄</button>` : ''}
-        ${session.status === 'dismissed' ? `<button class="reactivate-btn" title="Reactivate session">▶️</button>` : ''}
-        ${session.status !== 'offline' && session.status !== 'dismissed' ? `<button class="dismiss-btn" title="Dismiss (keep context)">💤</button>` : ''}
-        <button class="rename-btn" title="Rename">✏️</button>
-        <button class="delete-btn" title="Delete">🗑️</button>
-      </div>
-    `
-
-    // Click to select and filter
-    el.addEventListener('click', (e) => {
-      // Ignore if clicking action buttons
-      if ((e.target as HTMLElement).closest('.session-actions')) return
-      selectManagedSession(session.id)
-    })
-
-    // Rename button
-    el.querySelector('.rename-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const newName = prompt('Enter new name:', session.name)
-      if (newName && newName !== session.name) {
-        renameManagedSession(session.id, newName)
-      }
-    })
-
-    // Delete button
-    el.querySelector('.delete-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      if (confirm(`Delete session "${session.name}"?`)) {
-        deleteManagedSession(session.id)
-      }
-    })
-
-    // Restart button (only shown for offline sessions)
-    el.querySelector('.restart-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      restartManagedSession(session.id, session.name)
-    })
-
-    // Dismiss button (grey out but keep tmux alive)
-    el.querySelector('.dismiss-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      dismissManagedSession(session.id)
-    })
-
-    // Reactivate button (for dismissed sessions)
-    el.querySelector('.reactivate-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      reactivateManagedSession(session.id)
-    })
-
-    container.appendChild(el)
-  })
-}
+// NOTE: renderManagedSessions() removed - React SessionsPanel now handles rendering
+// via Zustand store updates (getAppState().setManagedSessions())
 
 /**
  * Select a managed session for prompts (null = all/legacy mode)
@@ -272,7 +130,8 @@ function renderManagedSessions(): void {
  */
 function selectManagedSession(sessionId: string | null): void {
   state.selectedManagedSession = sessionId
-  renderManagedSessions()
+  // Sync with Zustand store
+  getAppState().setSelectedManagedSession(sessionId)
   // Sound is played in focusSession() when the zone is focused
 
   // Persist selection to localStorage
@@ -327,7 +186,7 @@ async function createManagedSession(
     console.error('Failed to create session:', data.error)
     // Show offline banner if not connected, otherwise show alert
     if (!state.client?.isConnected) {
-      showOfflineBanner()
+      getAppState().setOfflineMode(true)
     } else {
       alert(`Failed to create session: ${data.error}`)
     }
@@ -362,6 +221,8 @@ async function fetchServerInfo(): Promise<void> {
   const data = await sessionAPI.getServerInfo()
   if (data.ok && data.cwd) {
     state.serverCwd = data.cwd
+    // Sync with Zustand store
+    getAppState().setServerCwd(data.cwd)
     // Update modal display
     const cwdEl = document.getElementById('modal-default-cwd')
     if (cwdEl) {
@@ -402,6 +263,7 @@ async function deleteManagedSession(sessionId: string): Promise<void> {
   // If we deleted the selected session, clear selection
   if (state.selectedManagedSession === sessionId) {
     state.selectedManagedSession = null
+    getAppState().setSelectedManagedSession(null)
     const targetEl = document.getElementById('prompt-target')
     if (targetEl) targetEl.innerHTML = ''
   }
@@ -548,11 +410,7 @@ function setupManagedSessions(): void {
   const createBtn = document.getElementById('modal-create')
 
   // Default cwd will be set by fetchServerInfo()
-
-  // Setup directory autocomplete
-  if (cwdInput) {
-    setupDirectoryAutocomplete(cwdInput)
-  }
+  // Note: Directory autocomplete for React NewSessionModal handled by DirectoryAutocomplete component
 
   // Auto-populate name from directory when cwd changes
   if (cwdInput && nameInput) {
@@ -618,7 +476,7 @@ function setupManagedSessions(): void {
       // Check if this pending zone still exists (wasn't cleaned up)
       for (const [, pId] of pendingZonesToCleanup) {
         if (pId === pendingId) {
-          showZoneTimeoutModal()
+          showAppModal('zoneTimeout')
           break
         }
       }
@@ -680,15 +538,11 @@ function setupManagedSessions(): void {
   nameInput?.addEventListener('keydown', handleEnter)
   cwdInput?.addEventListener('keydown', handleEnter)
 
-  // Initial render
-  renderManagedSessions()
 }
 
 // ============================================================================
 // Context Menu (appears at click location for create/delete actions)
 // ============================================================================
-
-let contextMenu: ContextMenu | null = null
 
 function handleContextMenuAction(action: string, context: ContextMenuContext): void {
   if (action === 'create' && context.worldPosition) {
@@ -723,7 +577,7 @@ function showZoneInfo(sessionId: string): void {
   const sessionState = state.sessions.get(sessionId)
   const stats = sessionState?.stats
 
-  showZoneInfoModal({
+  showZoneInfoModalFromEvent({
     managedSession: managed,
     stats,
   })
@@ -747,7 +601,7 @@ function showZoneCommand(sessionId: string): void {
     return
   }
 
-  showZoneCommandModal({
+  showZoneCommandModalFromEvent({
     sessionId: managed.id,
     sessionName: managed.name,
     sessionColor: zone.color,
@@ -764,7 +618,7 @@ function showZoneCommand(sessionId: string): void {
  * Create a text tile at a hex position (opens modal for text)
  */
 async function createTextTileAtHex(hex: { q: number; r: number }): Promise<void> {
-  const text = await showTextLabelModal({
+  const text = await showTextLabelModalAsync({
     title: 'Add Label',
     placeholder: 'Enter your label text here...\nSupports multiple lines.',
   })
@@ -791,7 +645,7 @@ async function editTextTile(tileId: string): Promise<void> {
   const tile = state.scene?.getTextTiles().find(t => t.id === tileId)
   if (!tile) return
 
-  const text = await showTextLabelModal({
+  const text = await showTextLabelModalAsync({
     title: 'Edit Label',
     placeholder: 'Enter your label text here...',
     initialText: tile.text,
@@ -841,9 +695,8 @@ async function deleteZoneBySessionId(zoneId: string): Promise<void> {
 }
 
 function setupContextMenu(): void {
-  contextMenu = new ContextMenu({
-    onAction: handleContextMenuAction,
-  })
+  // Set up action handler for React context menu
+  contextMenu.setActionHandler(handleContextMenuAction)
 }
 
 // ============================================================================
@@ -1805,12 +1658,13 @@ function handleEvent(event: ClaudeEvent) {
   const session = getOrCreateSession(event.sessionId)
 
   state.eventHistory.push(event)
+  // Sync with Zustand store
+  getAppState().addEvent(event)
 
   // Dispatch to EventBus (new decoupled handlers)
   // This runs in parallel with the old switch statement during migration
   const eventContext: EventContext = {
     scene: state.scene,
-    timelineManager: state.timelineManager,
     soundEnabled: state.soundEnabled,
     session: session ? {
       id: event.sessionId,
@@ -1823,9 +1677,7 @@ function handleEvent(event: ClaudeEvent) {
   }
   eventBus.emit(event.type as EventType, event as any, eventContext)
 
-  // If no session (unlinked), still add to timeline with default color but skip 3D updates
-  const eventColor = session?.color ?? 0x888888
-  state.timelineManager?.add(event, eventColor)
+  // Timeline is now handled by React via Zustand eventHistory
 
   // Skip 3D scene updates for unlinked sessions
   if (!session) {
@@ -1857,18 +1709,26 @@ function handleEvent(event: ClaudeEvent) {
       }
 
       // AskUserQuestion needs attention and shows modal
-      // (zone attention and AttentionSystem queue are handled by showQuestionModal)
+      // (zone attention and AttentionSystem queue are handled by the React QuestionModal)
       if (e.tool === 'AskUserQuestion') {
-        const toolInput = e.toolInput as { questions?: QuestionData['questions'] }
+        const toolInput = e.toolInput as {
+          questions?: Array<{
+            question: string
+            header: string
+            options: Array<{ label: string; description?: string }>
+            multiSelect: boolean
+          }>
+        }
         if (toolInput.questions && toolInput.questions.length > 0) {
           // Find the managed session for this Claude session
           const managedSession = state.managedSessions.find(
             s => s.claudeSessionId === event.sessionId
           )
-          showQuestionModal({
+          showQuestionModalFromEvent({
             sessionId: event.sessionId,
             managedSessionId: managedSession?.id || null,
             questions: toolInput.questions,
+            apiUrl: API_URL,
           })
           updateAttentionBadge()
         }
@@ -1894,7 +1754,7 @@ function handleEvent(event: ClaudeEvent) {
 
       // Hide question modal when AskUserQuestion completes
       if (e.tool === 'AskUserQuestion') {
-        hideQuestionModal()
+        hideAppModal()
       }
 
       updateStats()
@@ -1917,7 +1777,8 @@ function handleEvent(event: ClaudeEvent) {
       const e = event as import('../shared/types').UserPromptSubmitEvent
       // Store last prompt for this session
       state.lastPrompts.set(event.sessionId, e.prompt)
-      renderManagedSessions()
+      // Sync with Zustand store
+      getAppState().setLastPrompt(event.sessionId, e.prompt)
 
       // [Sound, zone status, character state handled by EventBus]
 
@@ -1973,7 +1834,6 @@ async function interruptSession(sessionName: string): Promise<void> {
   toast.info(`Interrupt sent to ${sessionName}`, {
     icon: '⛔',
     duration: 2500,
-    html: true,
   })
 
   try {
@@ -2178,11 +2038,13 @@ function init() {
 
   // Initialize attention system
   state.attentionSystem = new AttentionSystem({
-    onQueueChange: () => renderManagedSessions(),
+    // Bump version counter to trigger React re-renders
+    onQueueChange: () => getAppState().bumpAttentionVersion(),
   })
+  // Sync with Zustand store
+  getAppState().setAttentionSystem(state.attentionSystem)
 
-  // Initialize timeline manager
-  state.timelineManager = new TimelineManager()
+  // Timeline is now handled by React component via Zustand eventHistory
 
   // Register EventBus handlers (decoupled event handling)
   registerAllHandlers()
@@ -2198,11 +2060,12 @@ function init() {
 
   state.client.onConnection((connected) => {
     updateStatus(connected, connected ? 'Connected' : 'Disconnected')
+    // Sync with Zustand for React components
+    getAppState().setConnected(connected)
     console.log('Connection status:', connected)
 
     if (connected) {
       hasConnected = true
-      hideNotConnectedOverlay()
 
       // Update terminal manager's send function and resubscribe to PTY sessions
       if (state.terminalManager) {
@@ -2225,28 +2088,14 @@ function init() {
     })
   }
 
-  // Show not-connected overlay after timeout if never connected (production only)
-  if (!import.meta.env.DEV) {
-    setTimeout(() => {
-      if (!hasConnected) {
-        console.log('Connection timeout - showing overlay')
-        showNotConnectedOverlay()
-      }
-    }, 3000)  // 3 seconds to connect before showing overlay
-  }
+  // Connection overlay is now handled by React component
+  // It shows automatically when connected=false and offlineMode=false
 
   state.client.onEvent(handleEvent)
 
-  // Handle history batch - pre-scan for completions before rendering
+  // Handle history batch - process all events
   state.client.onHistory((events) => {
-    // First pass: collect all completed tool use IDs (across all sessions)
-    for (const event of events) {
-      if (event.type === 'post_tool_use') {
-        const e = event as PostToolUseEvent
-        state.timelineManager?.markCompleted(e.toolUseId)
-      }
-    }
-    // Second pass: process all events (sessions created dynamically)
+    // Timeline completion tracking now handled by React via eventHistory
     for (const event of events) {
       handleEvent(event)
     }
@@ -2387,7 +2236,8 @@ function init() {
     }
 
     state.managedSessions = sessions
-    renderManagedSessions()
+    // Sync with Zustand store so React components see the updates
+    getAppState().setManagedSessions(sessions)
 
     // Sync zone labels with managed session names
     syncZoneLabels()
@@ -2431,9 +2281,16 @@ function init() {
         context: string
         options: Array<{ number: string; label: string }>
       }
-      showPermissionModal(sessionId, tool, context, options)
+      showPermissionModalFromEvent({
+        sessionId,
+        tool,
+        context,
+        options,
+        apiUrl: API_URL,
+        getManagedSessions: () => state.managedSessions,
+      })
     } else if (message.type === 'permission_resolved') {
-      hidePermissionModal()
+      hideAppModal()
     } else if (message.type === 'text_tiles') {
       // Update text tiles in scene
       const tiles = message.payload as import('../shared/types').TextTile[]
@@ -2528,48 +2385,18 @@ function init() {
   // Fetch config (username, etc.)
   fetchConfig()
 
-  // Setup settings modal
-  setupSettingsModal(sessionAPI, AGENT_PORT)
+  // Setup about modal button to open React modal
+  const aboutBtn = document.getElementById('about-btn')
+  aboutBtn?.addEventListener('click', () => showAppModal('about'))
 
-  // Setup about modal
-  setupAboutModal()
+  // Setup settings button to open React modal
+  const settingsBtn = document.getElementById('settings-btn')
+  settingsBtn?.addEventListener('click', () => showAppModal('settings'))
 
   // Setup dev panel (animation testing, Alt+D to toggle)
   setupDevPanel()
 
-  // Setup question modal (for AskUserQuestion)
-  setupQuestionModal({
-    scene: state.scene,
-    soundEnabled: state.soundEnabled,
-    apiUrl: API_URL,
-    attentionSystem: state.attentionSystem,
-  })
-
-  // Setup permission modal (for tool permissions)
-  setupPermissionModal({
-    scene: state.scene,
-    soundEnabled: state.soundEnabled,
-    apiUrl: API_URL,
-    attentionSystem: state.attentionSystem,
-    getManagedSessions: () => state.managedSessions,
-  })
-
-  // Setup zone info modal (for session details)
-  setupZoneInfoModal({
-    soundEnabled: state.soundEnabled,
-  })
-
-  // Setup text label modal (for hex text labels)
-  setupTextLabelModal()
-
-  // Setup zone command modal (quick command input near zone)
-  setupZoneCommandModal()
-
-  // Setup zone timeout modal (shown when zone creation takes too long)
-  setupZoneTimeoutModal()
-
-  // Setup not-connected overlay
-  setupNotConnectedOverlay()
+  // React modals and overlays are mounted automatically via App.tsx
 
   // Setup voice input
   // On vibecraft.sh: voice is always available via cloud proxy, set up immediately
@@ -2629,9 +2456,6 @@ function init() {
   updateActivity('Waiting for connection...')
   updateStats()
 
-  // Check for updates (non-blocking)
-  checkForUpdates()
-
   // Refit terminals when page becomes visible (handles device switching)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
@@ -2670,6 +2494,41 @@ function init() {
     window.visualViewport.addEventListener('resize', updateKeyboardHeight)
     window.visualViewport.addEventListener('scroll', updateKeyboardHeight)
     updateKeyboardHeight()
+  }
+
+  // Mount React app alongside existing vanilla TS code
+  // This enables gradual migration - React components will progressively
+  // take over UI rendering while keeping the app functional
+  const reactRoot = document.getElementById('react-root')
+  if (reactRoot) {
+    const root = createRoot(reactRoot)
+    root.render(createElement(App, {
+      agentPort: AGENT_PORT,
+      onRefreshSessions: () => sessionAPI.refreshSessions(),
+      sessionCallbacks: {
+        onSelectSession: selectManagedSession,
+        onDeleteSession: deleteManagedSession,
+        onRestartSession: restartManagedSession,
+        onDismissSession: dismissManagedSession,
+        onReactivateSession: reactivateManagedSession,
+        onRenameSession: renameManagedSession,
+        onNewSession: () => showAppModal('newSession', {
+          defaultCwd: state.serverCwd,
+          onCreate: async (options: { name: string; cwd: string; continueSession: boolean; skipPermissions: boolean; chrome: boolean }) => {
+            await sessionAPI.createSession(
+              options.name,
+              options.cwd,
+              {
+                continue: options.continueSession,
+                skipPermissions: options.skipPermissions,
+                chrome: options.chrome,
+              }
+            )
+          },
+        }),
+      },
+    }))
+    console.log('React app mounted')
   }
 
   console.log('Vibecraft initialized (multi-session enabled)')

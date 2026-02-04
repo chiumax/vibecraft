@@ -1,9 +1,13 @@
 /* Main CSS entry point - imports all style modules */
 
+/* Tailwind CSS and shadcn/ui base */
+@import './globals.css';
+
 /* Base styles */
 @import './base.css';
 @import './sessions.css';
 @import './todos.css';
+@import './kanban.css';
 @import './feed.css';
 @import './prompt.css';
 @import './hud.css';

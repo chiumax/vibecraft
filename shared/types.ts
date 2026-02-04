@@ -447,6 +447,116 @@ export interface UpdateTextTileRequest {
 }
 
 // ============================================================================
+// Session Stats & Achievements
+// ============================================================================
+
+/** Tool usage statistics */
+export interface ToolStats {
+  /** Number of times tool was used */
+  count: number
+  /** Number of successful uses */
+  successes: number
+  /** Number of failed uses */
+  failures: number
+  /** Total duration in ms */
+  totalDuration: number
+}
+
+/** A single prompt record */
+export interface PromptRecord {
+  /** Unique ID */
+  id: string
+  /** The prompt text */
+  text: string
+  /** Timestamp when sent */
+  timestamp: number
+  /** Session ID this prompt was sent to */
+  sessionId: string
+  /** Whether this prompt led to a successful outcome */
+  outcome?: 'success' | 'error' | 'pending'
+  /** Number of tool uses triggered by this prompt */
+  toolUses?: number
+  /** Number of errors during this prompt's execution */
+  errors?: number
+  /** Whether a git commit was made */
+  committedCode?: boolean
+  /** Duration until stop event (ms) */
+  duration?: number
+}
+
+/** Per-session statistics */
+export interface SessionStats {
+  /** Session ID (matches ManagedSession.id) */
+  sessionId: string
+  /** Session name (for display) */
+  sessionName: string
+  /** First activity timestamp */
+  firstSeen: number
+  /** Last activity timestamp */
+  lastSeen: number
+  /** Total prompts sent */
+  totalPrompts: number
+  /** Tool usage breakdown */
+  toolUsage: Record<string, ToolStats>
+  /** Total tokens consumed */
+  totalTokens: number
+  /** Files touched (unique paths) */
+  filesTouched: string[]
+  /** Git commits made (count) */
+  gitCommits: number
+  /** Total time in "working" state (ms) */
+  workingTime: number
+  /** Total errors encountered */
+  totalErrors: number
+  /** Total successful tool uses */
+  totalSuccesses: number
+  /** Achievement IDs earned */
+  achievements: string[]
+  /** Current streak (consecutive successful prompts) */
+  currentStreak: number
+  /** Best streak ever */
+  bestStreak: number
+}
+
+/** Achievement definition */
+export interface Achievement {
+  /** Unique achievement ID */
+  id: string
+  /** Display name */
+  name: string
+  /** Description of how to earn */
+  description: string
+  /** Icon/emoji */
+  icon: string
+  /** Category */
+  category: 'tools' | 'prompts' | 'git' | 'efficiency' | 'milestones'
+  /** Condition to check (threshold value) */
+  threshold?: number
+  /** Whether this is a hidden achievement */
+  hidden?: boolean
+}
+
+/** Global stats file structure */
+export interface SessionStatsFile {
+  /** Version for migrations */
+  version: number
+  /** Stats per session */
+  sessions: Record<string, SessionStats>
+  /** All prompts (for analysis) */
+  prompts: PromptRecord[]
+  /** Global totals */
+  totals: {
+    totalPrompts: number
+    totalToolUses: number
+    totalTokens: number
+    totalCommits: number
+    totalSessions: number
+  }
+  /** Achievements unlocked globally */
+  unlockedAchievements: string[]
+}
+
+// ============================================================================
 // Configuration
 // ============================================================================
 
@@ -466,4 +576,27 @@ export const DEFAULT_CONFIG: VibecraftConfig = {
   eventsFile: './data/events.jsonl',
   maxEventsInMemory: 1000,
   debug: false,
+}
+
+// ============================================================================
+// Todos / Kanban
+// ============================================================================
+
+/** Status for kanban board columns */
+export type TodoStatus = 'todo' | 'in-progress' | 'done' | 'blocked' | 'icebox'
+
+/** A single todo item */
+export interface Todo {
+  id: string
+  text: string
+  completed: boolean  // Keep for backwards compatibility
+  status: TodoStatus  // Kanban column status
+  createdAt: number
+}
+
+/** Todos grouped by session */
+export interface SessionTodos {
+  sessionId: string
+  sessionName: string
+  todos: Todo[]
 }

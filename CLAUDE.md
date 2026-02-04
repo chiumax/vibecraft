@@ -80,6 +80,67 @@ export function registerAllHandlers(): void {
 
 **Design principle:** EventBus handlers update 3D scene state. main.ts handles DOM UI updates (updateActivity, updateStats, etc.) and special cases (modals).
 
+### React Integration (Migration in Progress)
+
+The app is being migrated from vanilla TypeScript to React 18 with Zustand for state management. This is a gradual migration that keeps the app functional throughout.
+
+**Current State:**
+- React 18 mounted alongside existing vanilla TS code
+- Zustand store (`src/stores/appStore.ts`) mirrors existing state
+- Modal components migrated to React
+- Layout, session, and scene components created (not yet fully integrated)
+- Three.js integration via refs and hooks
+
+**Directory Structure:**
+```
+src/
+├── components/
+│   ├── layout/
+│   │   ├── AppLayout.tsx         # Responsive layout switching
+│   │   └── MobileNav.tsx         # Mobile navigation
+│   ├── modals/
+│   │   ├── Modal.tsx             # Base modal component
+│   │   ├── AboutModal.tsx
+│   │   ├── SettingsModal.tsx
+│   │   ├── QuestionModal.tsx
+│   │   ├── PermissionModal.tsx
+│   │   ├── ZoneInfoModal.tsx
+│   │   ├── ZoneTimeoutModal.tsx
+│   │   ├── NewSessionModal.tsx
+│   │   └── TextLabelModal.tsx
+│   ├── sessions/
+│   │   ├── SessionItem.tsx
+│   │   └── SessionList.tsx
+│   └── scene/
+│       ├── ScenePanel.tsx        # Three.js container
+│       └── SceneHud.tsx          # Overlay HUD
+├── hooks/
+│   ├── useThreeScene.ts          # Three.js integration
+│   ├── useTerminal.ts            # xterm.js integration
+│   └── useKeyboardShortcuts.ts
+├── stores/
+│   └── appStore.ts               # Zustand store
+└── App.tsx                       # React root component
+```
+
+**Zustand Store:**
+```typescript
+// Access state from React
+const connected = useAppStore((s) => s.connected)
+
+// Access state from vanilla TS (for Three.js, EventBus)
+import { getAppState, showAppModal } from './stores'
+const state = getAppState()
+showAppModal('settings')
+```
+
+**Three.js Pattern:**
+Three.js stays outside React's render cycle, integrated via refs:
+```typescript
+const containerRef = useRef<HTMLDivElement>(null)
+const { sceneRef } = useThreeScene(containerRef)
+```
+
 ## Key Files
 
 ### `shared/types.ts`
@@ -592,6 +653,12 @@ Client rebuilds its local `claudeToManagedLink` map from server data on every `s
 - **Station glow pulse**: Brief ring highlight when tools use stations
 - **Zone Command modal**: Right-click zone → C for quick prompt input positioned near the 3D zone
 - **Browser terminal (PTY)**: Full xterm.js terminal in browser, backed by tmux for persistence (see [docs/PTY-TERMINAL.md](docs/PTY-TERMINAL.md))
+- **Sound packs**: 5 switchable sound packs (Synth, Half-Life Classic, Sci-Fi, Action, Retro) with WAV file support
+- **Session stats tracking**: Track prompts, tool usage, success rates, git commits, and files touched per session
+- **Achievement system**: 30+ achievements across 5 categories (tools, prompts, git, efficiency, milestones)
+- **Prompt outcome detection**: Automatic success/error classification based on tool failures
+- **Streak tracking**: Track consecutive successful prompts for reward systems
+- **Good prompt analysis**: API endpoints to retrieve successful prompts for ML/analysis
 
 ## Browser Terminal (PTY Mode)
 
@@ -688,10 +755,62 @@ soundManager.setEnabled(false)      // Mute all
 |-------|---------|-------------|
 | `git_commit` | Bash `git commit` | Satisfying fanfare (G3→B3→D4→G4 + shimmer) |
 
+### Sound Packs
+
+Vibecraft supports multiple sound packs that can be switched in Settings. Each pack maps sounds to WAV files, with fallback to synthesized sounds.
+
+**File:** `src/audio/SoundPacks.ts`
+
+**Available Packs:**
+| Pack | Description |
+|------|-------------|
+| `synth` | Default - Clean synthesized sounds via Tone.js |
+| `classic` | Half-Life HEV suit sounds (blip, beep, danger) |
+| `scifi` | Futuristic tech sounds (buttons, whooshes) |
+| `action` | Combat and impact sounds (ricochets, explosions) |
+| `retro` | Classic menu sounds (levers, latches) |
+
+**WAV files location:** `public/sfx/{pack-name}/`
+
+**Usage:**
+```typescript
+// Switch pack
+soundManager.setSoundPack('classic')
+
+// Preload pack sounds
+soundManager.preloadPack()
+
+// Get current pack
+soundManager.getSoundPack() // 'classic'
+```
+
+**How it works:**
+1. When `play(soundName)` is called, SoundManager first checks if the current pack has a WAV mapping
+2. If mapped, plays the WAV file via HTMLAudioElement (cloned for overlapping sounds)
+3. If not mapped, falls back to synthesized Tone.js sound
+
+**Adding a new pack:**
+```typescript
+// In src/audio/SoundPacks.ts
+export const SOUND_PACKS: Record<SoundPackId, SoundPack> = {
+  // ... existing packs
+  mypack: {
+    id: 'mypack',
+    name: 'My Pack',
+    description: 'Custom sounds',
+    sounds: {
+      read: '/sfx/mypack/read.wav',
+      bash: '/sfx/mypack/bash.wav',
+      // ... map sounds you want to override
+    },
+  },
+}
+```
+
 ### Design Notes
 
 - **Theme:** "Digital" - clean synth tones, quick response, non-intrusive
-- **No audio files:** All sounds synthesized via Web Audio API
+- **Hybrid approach:** WAV files for packs, synthesized fallback
 - **User gesture required:** `soundManager.init()` must be called from click/keypress
 - **Aliases:** Glob→grep, WebSearch→webfetch, NotebookEdit→write
 
@@ -748,6 +867,94 @@ setInterval(() => {
   soundManager.updateListener(camera.position.x, camera.position.z, camera.rotation.y)
 }, 100)
 ```
+
+## Session Stats & Achievements
+
+Vibecraft tracks session statistics and unlocks achievements based on usage patterns. This data can be used to analyze prompt effectiveness and build reward systems.
+
+### Architecture
+
+**File:** `server/SessionStatsManager.ts`
+
+**Storage:** `~/.vibecraft/data/session-stats.json`
+
+**Types:** Defined in `shared/types.ts`:
+- `SessionStats` - Per-session statistics
+- `PromptRecord` - Individual prompt with outcome
+- `Achievement` - Achievement definition
+
+### What's Tracked
+
+**Per-session stats:**
+| Metric | Description |
+|--------|-------------|
+| `totalPrompts` | Number of prompts sent |
+| `toolUsage` | Breakdown by tool (count, successes, failures, duration) |
+| `filesTouched` | Unique file paths accessed |
+| `gitCommits` | Number of git commits made |
+| `totalErrors` | Failed tool uses |
+| `totalSuccesses` | Successful tool uses |
+| `currentStreak` | Consecutive successful prompts |
+| `bestStreak` | Best streak ever achieved |
+
+**Prompt tracking:**
+| Field | Description |
+|-------|-------------|
+| `text` | Prompt text (truncated to 1000 chars) |
+| `timestamp` | When sent |
+| `outcome` | `success` / `error` / `pending` |
+| `toolUses` | Number of tools triggered |
+| `errors` | Errors encountered |
+| `committedCode` | Whether a git commit was made |
+| `duration` | Time from prompt to stop (ms) |
+
+### Achievements
+
+30+ achievements across 5 categories:
+
+| Category | Examples |
+|----------|----------|
+| `tools` | First Steps (1 tool), Tool Time (100 tools), Swiss Army Knife (all tools) |
+| `prompts` | Hello Claude (1 prompt), Prompt Whisperer (25 streak) |
+| `git` | First Blood (1 commit), Commit Champion (50 commits) |
+| `efficiency` | Efficient (90% success), Flawless (no errors) |
+| `milestones` | Token Titan (1M tokens), Explorer (100 files) |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/session-stats` | GET | All stats and totals |
+| `/session-stats/:id` | GET | Stats for specific session |
+| `/achievements` | GET | Unlocked and locked achievements |
+| `/prompts` | GET | Recent 100 prompts |
+| `/prompts/good` | GET | Successful prompts (for analysis) |
+
+### Usage
+
+```typescript
+// Stats are tracked automatically on events
+// No client-side code needed
+
+// Fetch stats via API
+const stats = await fetch('/session-stats').then(r => r.json())
+console.log(stats.totals) // { totalPrompts, totalToolUses, totalCommits, ... }
+
+// Get achievements
+const { unlocked, locked } = await fetch('/achievements').then(r => r.json())
+
+// Analyze good prompts
+const goodPrompts = await fetch('/prompts/good').then(r => r.json())
+```
+
+### Good Prompt Detection
+
+A prompt is considered "good" if:
+1. `outcome === 'success'` (no errors during execution)
+2. `errors === 0`
+3. `toolUses > 0` (actually did something)
+
+Prompts that led to git commits (`committedCode: true`) are especially valuable for analysis.
 
 ## Keyboard Shortcuts
 

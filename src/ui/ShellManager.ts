@@ -222,11 +222,13 @@ export function setupSessionsTabs(apiUrl: string): void {
   const shellContent = document.getElementById('shell-tab-content')
   const todosContent = document.getElementById('todos-tab-content')
 
-  // Initialize todos manager with API URL
+  // Initialize todos manager with API URL (now uses #todos-list-view)
+  const todosListView = document.getElementById('todos-list-view')
+  const todosBoardView = document.getElementById('todos-board-view')
   const todosManager = initTodosManager()
   todosManager.setApiUrl(apiUrl)
-  if (todosContent) {
-    todosManager.init(todosContent)
+  if (todosListView) {
+    todosManager.init(todosListView)
   }
 
   // Update todos badge
@@ -234,6 +236,9 @@ export function setupSessionsTabs(apiUrl: string): void {
     updateTodosBadge()
   })
   updateTodosBadge()
+
+  // Setup todos view toggle (List/Board)
+  setupTodosViewToggle(todosListView, todosBoardView)
 
   // Expose function for TodosManager to get sessions
   ;(window as any).vibecraftGetSessions = () => {
@@ -276,6 +281,35 @@ export function setupSessionsTabs(apiUrl: string): void {
         todosContent?.classList.add('active')
         // Re-render in case sessions changed
         todosManager.render()
+      }
+    })
+  })
+}
+
+/**
+ * Setup the List/Board view toggle for todos
+ */
+function setupTodosViewToggle(
+  listView: HTMLElement | null,
+  boardView: HTMLElement | null
+): void {
+  const toggleBtns = document.querySelectorAll('.todos-view-btn')
+
+  toggleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = (btn as HTMLElement).dataset.view
+
+      // Update active button
+      toggleBtns.forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+
+      // Show/hide views
+      if (view === 'list') {
+        listView?.classList.remove('hidden')
+        boardView?.classList.add('hidden')
+      } else if (view === 'board') {
+        listView?.classList.add('hidden')
+        boardView?.classList.remove('hidden')
       }
     })
   })

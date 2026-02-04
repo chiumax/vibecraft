@@ -14,6 +14,59 @@
   flex-direction: column;
 }
 
+/* View toggle (List/Board) */
+#todos-view-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.todos-view-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.todos-view-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.todos-view-btn.active {
+  background: rgba(34, 211, 238, 0.2);
+  border-color: rgba(34, 211, 238, 0.4);
+  color: #22d3ee;
+}
+
+/* List and Board views */
+#todos-list-view {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#todos-board-view {
+  flex: 1;
+  overflow: hidden;
+}
+
+#todos-board-view.hidden {
+  display: none;
+}
+
+#todos-list-view.hidden {
+  display: none;
+}
+
 /* When todos tab is active, panel expands */
 #sessions-panel:has(#todos-tab-content.active) {
   flex: 1;

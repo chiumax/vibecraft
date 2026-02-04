@@ -298,14 +298,17 @@ export class TerminalManager {
   handleMessage(message: { type: string; sessionId: string; data?: string; exitCode?: number }): void {
     if (message.type === 'pty:output' || message.type === 'pty:buffer') {
       const terminal = this.terminals.get(message.sessionId)
-      if (terminal && message.data) {
-        // Hide loading overlay on first output
+      if (terminal) {
+        // Hide loading overlay on first message (even if empty - confirms subscription succeeded)
         const wrapper = this.container.querySelector(`[data-session-id="${message.sessionId}"]`)
         const loading = wrapper?.querySelector('.terminal-loading')
         if (loading) {
           loading.remove()
         }
-        terminal.write(message.data)
+        // Write data if present
+        if (message.data) {
+          terminal.write(message.data)
+        }
       }
     } else if (message.type === 'pty:detached') {
       // PTY detached but tmux session still alive - can reattach

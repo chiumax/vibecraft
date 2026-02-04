@@ -37,6 +37,7 @@ import type {
 import { DEFAULTS } from '../shared/defaults.js'
 import { GitStatusManager } from './GitStatusManager.js'
 import { ProjectsManager } from './ProjectsManager.js'
+import { SessionStatsManager } from './SessionStatsManager.js'
 import { ptyManager } from './PtyManager.js'
 import { fileURLToPath } from 'url'
 
@@ -89,6 +90,7 @@ const TMUX_SESSION = process.env.VIBECRAFT_TMUX_SESSION ?? DEFAULTS.TMUX_SESSION
 const SESSIONS_FILE = resolve(expandHome(process.env.VIBECRAFT_SESSIONS_FILE ?? DEFAULTS.SESSIONS_FILE))
 const TILES_FILE = resolve(expandHome(process.env.VIBECRAFT_TILES_FILE ?? '~/.vibecraft/data/tiles.json'))
 const TODOS_FILE = resolve(expandHome(process.env.VIBECRAFT_TODOS_FILE ?? '~/.vibecraft/data/todos.json'))
+const STATS_FILE = resolve(expandHome(process.env.VIBECRAFT_STATS_FILE ?? '~/.vibecraft/data/session-stats.json'))
 
 /** Time before a "working" session auto-transitions to idle (failsafe for missed events) */
 const WORKING_TIMEOUT_MS = 120_000 // 2 minutes
@@ -320,10 +322,13 @@ const managedSessions = new Map<string, ManagedSession>()
 const textTiles = new Map<string, TextTile>()
 
 /** Todos storage - keyed by session ID */
+type TodoStatus = 'todo' | 'in-progress' | 'done' | 'blocked' | 'icebox'
+
 interface Todo {
   id: string
   text: string
-  completed: boolean
+  completed: boolean  // Keep for backwards compatibility
+  status?: TodoStatus  // New kanban status (optional for migration)
   createdAt: number
 }
 
@@ -341,6 +346,9 @@ const gitStatusManager = new GitStatusManager()
 
 /** Project directories manager */
 const projectsManager = new ProjectsManager()
+
+/** Session stats and achievements tracker */
+const sessionStatsManager = new SessionStatsManager(STATS_FILE)
 
 /** Active voice transcription sessions (WebSocket client → Deepgram connection) */
 const voiceSessions = new Map<WebSocket, LiveClient>()
@@ -1502,6 +1510,27 @@ function addEvent(event: ClaudeEvent) {
     events.splice(0, events.length - MAX_EVENTS)
   }
 
+  // Track stats for ALL events (regardless of managed session)
+  const sessionName = findManagedSession(event.sessionId)?.name
+  switch (event.type) {
+    case 'pre_tool_use':
+      sessionStatsManager.trackToolStart(event as PreToolUseEvent, sessionName)
+      break
+    case 'post_tool_use':
+      sessionStatsManager.trackToolEnd(event as PostToolUseEvent, sessionName)
+      break
+    case 'user_prompt_submit':
+      const promptEvent = event as any
+      if (promptEvent.prompt) {
+        sessionStatsManager.trackPrompt(event.sessionId, promptEvent.prompt, sessionName)
+      }
+      break
+    case 'stop':
+    case 'session_end':
+      sessionStatsManager.trackStop(event.sessionId, true)
+      break
+  }
+
   // Update managed session status based on event
   const managedSession = findManagedSession(event.sessionId)
   if (managedSession) {
@@ -1520,6 +1549,10 @@ function addEvent(event: ClaudeEvent) {
         // Tool completed - update activity time but stay "working"
         // (Claude might be using more tools, stop event marks idle)
         managedSession.currentTool = undefined
+        // Update token count if available
+        if (managedSession.tokens) {
+          sessionStatsManager.trackTokens(event.sessionId, managedSession.tokens.cumulative)
+        }
         break
 
       case 'user_prompt_submit':
@@ -1864,6 +1897,48 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
       avgDurations,
       tokens,
     }))
+    return
+  }
+
+  // Session stats (historical data with achievements)
+  if (req.method === 'GET' && req.url === '/session-stats') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(sessionStatsManager.getAllStats()))
+    return
+  }
+
+  // Get stats for a specific session
+  if (req.method === 'GET' && req.url?.startsWith('/session-stats/')) {
+    const sessionId = req.url.slice('/session-stats/'.length)
+    const stats = sessionStatsManager.getSessionStats(sessionId)
+    if (stats) {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(stats))
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Session not found' }))
+    }
+    return
+  }
+
+  // Achievements
+  if (req.method === 'GET' && req.url === '/achievements') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(sessionStatsManager.getAchievements()))
+    return
+  }
+
+  // Recent prompts (for analysis)
+  if (req.method === 'GET' && req.url === '/prompts') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(sessionStatsManager.getRecentPrompts(100)))
+    return
+  }
+
+  // Good prompts (ones that led to success)
+  if (req.method === 'GET' && req.url === '/prompts/good') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(sessionStatsManager.getGoodPrompts()))
     return
   }
 
@@ -2783,6 +2858,16 @@ function main() {
 
     // Run initial health check to update session statuses
     checkSessionHealth()
+
+    // Graceful shutdown
+    const shutdown = () => {
+      log('Shutting down...')
+      sessionStatsManager.flush() // Save any pending stats
+      saveSessions() // Save session state
+      process.exit(0)
+    }
+    process.on('SIGINT', shutdown)
+    process.on('SIGTERM', shutdown)
   })
 }
 

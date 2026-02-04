@@ -101,7 +101,7 @@ export function NewSessionModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && hideModal()}>
-      <DialogContent className="sm:max-w-[450px] bg-card border-border">
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle>New Zone</DialogTitle>
         </DialogHeader>

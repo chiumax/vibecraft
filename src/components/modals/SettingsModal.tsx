@@ -20,6 +20,13 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Slider } from '../ui/slider'
 import { Switch } from '../ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
 import { KeybindSettings } from '../ui/keybind-settings'
 
 interface SettingsModalProps {
@@ -142,7 +149,7 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && hideModal()}>
-      <DialogContent className="sm:max-w-[500px] bg-card border-border">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
@@ -181,17 +188,18 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-sm w-20">Sound Pack</span>
-                <select
-                  value={soundPack}
-                  onChange={(e) => setSoundPack(e.target.value)}
-                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  {getSoundPackList().map((pack) => (
-                    <option key={pack.id} value={pack.id}>
-                      {pack.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={soundPack} onValueChange={setSoundPack}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getSoundPackList().map((pack) => (
+                      <SelectItem key={pack.id} value={pack.id}>
+                        {pack.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <p className="text-xs text-muted-foreground">
                 {getSoundPackList().find((p) => p.id === soundPack)?.description || ''}

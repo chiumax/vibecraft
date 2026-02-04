@@ -21,7 +21,7 @@ export function ZoneTimeoutModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && hideModal()}>
-      <DialogContent className="sm:max-w-[450px] bg-card border-border">
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle>Zone Not Responding</DialogTitle>
         </DialogHeader>

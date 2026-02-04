@@ -138,7 +138,7 @@ export function RunTodoModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[450px] bg-card border-border">
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle>Run Todo</DialogTitle>
         </DialogHeader>

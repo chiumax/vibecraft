@@ -128,7 +128,7 @@ export function PermissionModal() {
   return (
     <Dialog open={isOpen}>
       <DialogContent
-        className="sm:max-w-[500px] bg-card border-border"
+        className="sm:max-w-[500px]"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         // Hide the close button

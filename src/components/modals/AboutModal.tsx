@@ -38,7 +38,7 @@ export function AboutModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && hideModal()}>
-      <DialogContent className="sm:max-w-[480px] bg-card border-border">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="text-xl">Vibecraft</DialogTitle>
         </DialogHeader>

@@ -344,8 +344,48 @@ rm -rf ~/.vibecraft
 
 ---
 
+## Activity Feed vs Output View
+
+Vibecraft has two ways to view Claude's activity:
+
+### Feed (Activity Feed)
+Shows **events/metadata** about what's happening:
+- "You sent: fix the bug"
+- "🔧 Read → src/main.ts (52ms) ✓"
+- "🔧 Edit → src/main.ts (48ms) ✓"
+
+Useful for tracking progress at a glance.
+
+### Output (Transcript)
+Shows **Claude's actual text** as it's written:
+- "Let me look at that file..."
+- "I found the bug - there's a missing null check..."
+- Real-time streaming of Claude's responses
+
+Useful for reading Claude's explanations without terminal formatting.
+
+**Toggle between views** using the Feed/Output switch in the Activity panel.
+
+---
+
+## Session Linking
+
+Vibecraft tracks Claude sessions through hooks. When you start Claude Code:
+
+1. The hook captures the `sessionId` from Claude
+2. Vibecraft links this to a managed session (if cwd matches)
+3. Events from that session appear in the 3D view
+
+**If events don't appear:**
+- The Claude session might not be linked to a managed Vibecraft session
+- Create a new session in Vibecraft with the same working directory
+- Or manually link via the API
+
+---
+
 ## Getting Help
 
 - **GitHub Issues:** https://github.com/nearcyan/vibecraft/issues
 - **Technical Docs:** See [CLAUDE.md](../CLAUDE.md)
 - **Orchestration:** See [ORCHESTRATION.md](./ORCHESTRATION.md)
+- **Reading Claude Output:** See [READING-CLAUDE-OUTPUT.md](./READING-CLAUDE-OUTPUT.md)

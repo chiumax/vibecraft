@@ -1,5 +1,5 @@
 /**
- * FeedPanelPortal - Renders FeedPanel into the existing DOM container
+ * FeedPanelPortal - Renders FeedContainer into the existing DOM container
  *
  * This component bridges React and the vanilla TS layout system by using
  * a portal to render into the #activity-feed element.
@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { FeedPanel } from './FeedPanel'
+import { FeedContainer } from './FeedContainer'
 
 interface FeedPanelPortalProps {
   cwd?: string
@@ -43,5 +43,5 @@ export function FeedPanelPortal({ cwd }: FeedPanelPortalProps) {
 
   if (!container) return null
 
-  return createPortal(<FeedPanel cwd={cwd} />, container)
+  return createPortal(<FeedContainer cwd={cwd} />, container)
 }

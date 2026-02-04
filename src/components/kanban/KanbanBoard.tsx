@@ -14,16 +14,19 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { useTodosStore } from '../../stores/todosStore'
-import { useAppStore } from '../../stores'
+import { useAppStore, showAppModal } from '../../stores'
 import { ZONE_COLORS } from '../../scene/WorkshopScene'
 import type { Todo, TodoStatus, ManagedSession } from '@shared/types'
 import { KanbanHeader } from './KanbanHeader'
 import { KanbanColumn, COLUMN_CONFIGS } from './KanbanColumn'
 import { KanbanCardPlaceholder } from './KanbanCard'
+import { PlannerPanel } from '../planner'
 
 interface KanbanBoardProps {
   /** API URL for server requests */
   apiUrl?: string
+  /** Callback to send prompt to a session */
+  onSendPrompt?: (sessionId: string, prompt: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 interface DragData {
@@ -32,7 +35,7 @@ interface DragData {
   sessionName: string
 }
 
-export function KanbanBoard({ apiUrl = '/api' }: KanbanBoardProps) {
+export function KanbanBoard({ apiUrl = '/api', onSendPrompt }: KanbanBoardProps) {
   const managedSessions = useAppStore((s) => s.managedSessions)
 
   const {
@@ -165,6 +168,18 @@ export function KanbanBoard({ apiUrl = '/api' }: KanbanBoardProps) {
     [deleteTodo]
   )
 
+  // Handle run todo - opens RunTodoModal
+  const handleRunTodo = useCallback(
+    (sessionId: string, todo: Todo, sessionName: string) => {
+      showAppModal('runTodo', {
+        todo,
+        sessionId,
+        sessionName,
+      })
+    },
+    []
+  )
+
   if (!isLoaded) {
     return (
       <div className="kanban-loading">
@@ -182,6 +197,9 @@ export function KanbanBoard({ apiUrl = '/api' }: KanbanBoardProps) {
         onAddTodo={() => setShowAddModal(true)}
       />
 
+      {/* AI Planner Section */}
+      <PlannerPanel apiUrl={apiUrl} onSendPrompt={onSendPrompt} />
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -196,6 +214,7 @@ export function KanbanBoard({ apiUrl = '/api' }: KanbanBoardProps) {
               todos={grouped[config.id]}
               getSessionColor={getSessionColor}
               onDeleteTodo={handleDeleteTodo}
+              onRunTodo={handleRunTodo}
             />
           ))}
         </div>

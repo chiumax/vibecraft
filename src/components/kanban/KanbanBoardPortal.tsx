@@ -9,9 +9,10 @@ import { useTodosStore } from '../../stores/todosStore'
 
 interface KanbanBoardPortalProps {
   apiUrl?: string
+  onSendPrompt?: (sessionId: string, prompt: string) => Promise<{ ok: boolean; error?: string }>
 }
 
-export function KanbanBoardPortal({ apiUrl = '/api' }: KanbanBoardPortalProps) {
+export function KanbanBoardPortal({ apiUrl = '/api', onSendPrompt }: KanbanBoardPortalProps) {
   const [container, setContainer] = useState<HTMLElement | null>(null)
   const [isVisible, setIsVisible] = useState(false)
   const loadTodos = useTodosStore((s) => s.loadTodos)
@@ -82,7 +83,7 @@ export function KanbanBoardPortal({ apiUrl = '/api' }: KanbanBoardPortalProps) {
   if (!container) return null
 
   return createPortal(
-    <KanbanBoard apiUrl={apiUrl} />,
+    <KanbanBoard apiUrl={apiUrl} onSendPrompt={onSendPrompt} />,
     container
   )
 }

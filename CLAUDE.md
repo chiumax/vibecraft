@@ -198,6 +198,27 @@ tmux send-keys -t claude -l 'text' && sleep 0.1 && tmux send-keys -t claude Ente
 ```
 The `-l` flag sends text literally, then Enter is sent separately after a delay.
 
+### `server/ContextTracker.ts`
+Tracks which context files (CLAUDE.md, .claude/, docs/) Claude has read per session:
+
+- `initSession(sessionId, cwd)` - Initialize tracking for a new session
+- `trackFileRead(sessionId, filePath, cwd)` - Track when Claude reads a file
+- `processEvent(event, managedSessionId)` - Process pre_tool_use Read events
+- `getContext(sessionId)` - Get current context state
+- `getContextStatus(sessionId)` - Returns 'none', 'partial', or 'loaded'
+
+Categories detected: `project` (main CLAUDE.md), `parent` (parent dirs), `local` (subdirs), `rules` (.claude/), `docs` (docs/)
+
+### `server/PlannerAgent.ts`
+AI-powered goal decomposition using Claude Code sessions:
+
+- `buildPrompt(request)` - Builds planning prompt for Claude Code
+- `parseResponse(response)` - Parses Claude's JSON response into structured todos
+- `validateDependencies(todos)` - Checks for cycles in task dependencies
+- `getExecutionOrder(todos)` - Returns topological order for execution
+
+Uses Claude Code sessions instead of direct Anthropic API calls.
+
 ### `src/scene/WorkshopScene.ts`
 Three.js 3D scene setup:
 
@@ -659,6 +680,9 @@ Client rebuilds its local `claudeToManagedLink` map from server data on every `s
 - **Prompt outcome detection**: Automatic success/error classification based on tool failures
 - **Streak tracking**: Track consecutive successful prompts for reward systems
 - **Good prompt analysis**: API endpoints to retrieve successful prompts for ML/analysis
+- **Context visibility**: Track which CLAUDE.md files Claude has read with visual indicators (📄 → ✅)
+- **Todo-to-Agent flow**: Run button on kanban cards to send todos as prompts to Claude Code sessions
+- **AI Planner**: Goal decomposition using Claude Code sessions to break down high-level goals into structured todos
 
 ## Browser Terminal (PTY Mode)
 

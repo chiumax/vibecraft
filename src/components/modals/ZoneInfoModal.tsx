@@ -14,7 +14,8 @@ import {
 } from '../ui/dialog'
 import { Badge } from '../ui/badge'
 import { Card, CardContent } from '../ui/card'
-import type { ManagedSession, GitStatus } from '@shared/types'
+import { ContextIndicator, getContextStatus } from '../sessions/ContextIndicator'
+import type { ManagedSession, GitStatus, ContextFileCategory } from '@shared/types'
 
 export interface ZoneInfoModalData {
   managedSession: ManagedSession
@@ -111,6 +112,9 @@ export function ZoneInfoModal() {
             </div>
           )}
 
+          {/* Context Files */}
+          <ContextFilesSection context={s.context} />
+
           {/* Git Status */}
           {s.gitStatus?.isRepo ? (
             <GitStatusSection git={s.gitStatus} />
@@ -195,6 +199,93 @@ function StatCard({ value, label }: { value: number; label: string }) {
         <div className="text-xs text-muted-foreground">{label}</div>
       </CardContent>
     </Card>
+  )
+}
+
+const CATEGORY_LABELS: Record<ContextFileCategory, { label: string; icon: string }> = {
+  project: { label: 'Project', icon: '📋' },
+  parent: { label: 'Parent', icon: '📁' },
+  local: { label: 'Local', icon: '📄' },
+  rules: { label: 'Rules', icon: '⚙️' },
+  docs: { label: 'Docs', icon: '📚' },
+}
+
+function ContextFilesSection({ context }: { context?: ManagedSession['context'] }) {
+  const status = getContextStatus(context)
+  const files = context?.contextFiles ?? []
+
+  // Group files by category
+  const grouped = files.reduce((acc, file) => {
+    if (!acc[file.category]) {
+      acc[file.category] = []
+    }
+    acc[file.category].push(file)
+    return acc
+  }, {} as Record<ContextFileCategory, typeof files>)
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h4 className="text-sm font-medium text-muted-foreground">Context Files</h4>
+        <ContextIndicator context={context} size="md" />
+      </div>
+
+      {files.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No CLAUDE.md or context files read yet
+        </p>
+      ) : (
+        <Card>
+          <CardContent className="pt-4 space-y-3">
+            {/* Status summary */}
+            <div className="flex items-center gap-2 text-sm">
+              {context?.projectContextLoaded ? (
+                <span className="text-green-500">✅ Project context loaded</span>
+              ) : (
+                <span className="text-yellow-500">⚠️ Main CLAUDE.md not read</span>
+              )}
+            </div>
+
+            {/* Files by category */}
+            {(Object.keys(grouped) as ContextFileCategory[]).map((category) => {
+              const categoryConfig = CATEGORY_LABELS[category]
+              const categoryFiles = grouped[category]
+              if (!categoryFiles?.length) return null
+
+              return (
+                <div key={category} className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <span>{categoryConfig.icon}</span>
+                    <span>{categoryConfig.label}</span>
+                  </div>
+                  <div className="space-y-0.5 pl-4">
+                    {categoryFiles.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="text-xs font-mono text-muted-foreground truncate"
+                        title={file.path}
+                      >
+                        {shortenPath(file.path)}
+                        {file.readCount > 1 && (
+                          <span className="text-muted-foreground/60 ml-1">
+                            ({file.readCount}x)
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Total count */}
+            <div className="text-xs text-muted-foreground/60 pt-1 border-t border-border">
+              {files.length} context file{files.length !== 1 ? 's' : ''} read
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
 

@@ -34,6 +34,10 @@ import type {
   CreateTextTileRequest,
   UpdateTextTileRequest,
   TranscriptContent,
+  Todo,
+  SessionTodos,
+  PlanRequest,
+  PlannerState,
 } from '../shared/types.js'
 import { DEFAULTS } from '../shared/defaults.js'
 import { GitStatusManager } from './GitStatusManager.js'
@@ -41,6 +45,8 @@ import { ProjectsManager } from './ProjectsManager.js'
 import { SessionStatsManager } from './SessionStatsManager.js'
 import { ptyManager } from './PtyManager.js'
 import { TranscriptWatcher } from './TranscriptWatcher.js'
+import { ContextTracker } from './ContextTracker.js'
+import { plannerAgent } from './PlannerAgent.js'
 import { fileURLToPath } from 'url'
 
 // ============================================================================
@@ -324,21 +330,7 @@ const managedSessions = new Map<string, ManagedSession>()
 const textTiles = new Map<string, TextTile>()
 
 /** Todos storage - keyed by session ID */
-type TodoStatus = 'todo' | 'in-progress' | 'done' | 'blocked' | 'icebox'
-
-interface Todo {
-  id: string
-  text: string
-  completed: boolean  // Keep for backwards compatibility
-  status?: TodoStatus  // New kanban status (optional for migration)
-  createdAt: number
-}
-
-interface SessionTodos {
-  sessionId: string
-  sessionName: string
-  todos: Todo[]
-}
+// Todo and SessionTodos types are imported from shared/types.ts
 
 /** All session todos */
 let allTodos: SessionTodos[] = []
@@ -351,6 +343,18 @@ const projectsManager = new ProjectsManager()
 
 /** Session stats and achievements tracker */
 const sessionStatsManager = new SessionStatsManager(STATS_FILE)
+
+/** Context file tracker for managed sessions */
+const contextTracker = new ContextTracker({
+  onContextChange: (sessionId, context) => {
+    // Update the managed session with new context
+    const session = managedSessions.get(sessionId)
+    if (session) {
+      session.context = context
+      broadcastSessions()
+    }
+  },
+})
 
 /** Transcript watcher for real-time Claude output streaming */
 const transcriptWatcher = new TranscriptWatcher({ debug: DEBUG })
@@ -377,6 +381,15 @@ const claudeToManagedMap = new Map<string, string>()
 
 /** Counter for generating session names */
 let sessionCounter = 0
+
+/** Planner state for auto-execution */
+let plannerState: PlannerState = {
+  status: 'idle',
+  currentGoal: null,
+  executingTodoId: null,
+  completedCount: 0,
+  totalCount: 0,
+}
 
 // ============================================================================
 // Logging
@@ -884,6 +897,8 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
       if (cwd) {
         gitStatusManager.track(id, cwd)
         projectsManager.addProject(cwd, name)
+        // Initialize context tracking
+        contextTracker.initSession(id, cwd)
       }
 
       broadcastSessions()
@@ -960,6 +975,7 @@ function deleteSession(id: string): Promise<boolean> {
 
       managedSessions.delete(id)
       gitStatusManager.untrack(id)
+      contextTracker.clearSession(id)
       // Clean up mapping
       for (const [claudeId, managedId] of claudeToManagedMap) {
         if (managedId === id) {
@@ -1193,6 +1209,13 @@ function loadSessions(): void {
         // Track git status if session has a cwd
         if (session.cwd) {
           gitStatusManager.track(session.id, session.cwd)
+          // Initialize context tracking (will be populated as Claude reads files)
+          contextTracker.initSession(session.id, session.cwd)
+        }
+
+        // Restore context if it was saved
+        if (session.context) {
+          // Context was persisted, no need to re-init
         }
       }
     }
@@ -1558,6 +1581,8 @@ function addEvent(event: ClaudeEvent) {
       case 'pre_tool_use':
         managedSession.status = 'working'
         managedSession.currentTool = (event as PreToolUseEvent).tool
+        // Track context file reads (CLAUDE.md, .claude/, docs/)
+        contextTracker.processEvent(event as PreToolUseEvent, managedSession.id)
         break
 
       case 'post_tool_use':
@@ -2649,6 +2674,294 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
       res.writeHead(413, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Request body too large' }))
     })
+    return
+  }
+
+  // POST /todos/:sessionId/:todoId/execute - Execute a todo as a prompt
+  const executeMatch = req.url?.match(/^\/todos\/([^/]+)\/([^/]+)\/execute$/)
+  if (req.method === 'POST' && executeMatch) {
+    const [, todoSessionId, todoId] = executeMatch
+    collectRequestBody(req).then(async body => {
+      try {
+        const request = JSON.parse(body) as { sessionId: string | null; contextPrefix?: string }
+
+        // Find the todo
+        const sessionTodos = allTodos.find(st => st.sessionId === todoSessionId)
+        if (!sessionTodos) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Session todos not found' }))
+          return
+        }
+
+        const todoIndex = sessionTodos.todos.findIndex(t => t.id === todoId)
+        if (todoIndex === -1) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Todo not found' }))
+          return
+        }
+
+        const todo = sessionTodos.todos[todoIndex]
+
+        // Determine target session
+        let targetSessionId = request.sessionId
+        let targetSession: ManagedSession | undefined
+
+        if (targetSessionId) {
+          targetSession = managedSessions.get(targetSessionId)
+          if (!targetSession) {
+            res.writeHead(404, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ ok: false, error: 'Target session not found' }))
+            return
+          }
+        } else {
+          // Create a new session (TODO: implement session creation flow)
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Creating new session from todo not yet implemented. Please select an existing session.' }))
+          return
+        }
+
+        // Build the prompt
+        const promptParts: string[] = []
+        if (request.contextPrefix?.trim()) {
+          promptParts.push(request.contextPrefix.trim())
+        }
+        promptParts.push(todo.text)
+        const fullPrompt = promptParts.join('\n\n')
+
+        // Send the prompt
+        const result = await sendPromptToSession(targetSession.id, fullPrompt)
+        if (!result.ok) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: result.error }))
+          return
+        }
+
+        // Update the todo status
+        sessionTodos.todos[todoIndex] = {
+          ...todo,
+          status: 'in-progress',
+          completed: false,
+          executingSessionId: targetSession.id,
+          executionStartedAt: Date.now(),
+          contextPrefix: request.contextPrefix,
+        }
+        saveTodos()
+
+        log(`Executed todo "${todo.text.slice(0, 50)}..." on session ${targetSession.name}`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          ok: true,
+          todo: sessionTodos.todos[todoIndex],
+          restarted: result.restarted,
+        }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid request' }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // -------------------------------------------------------------------------
+  // Planner API (uses Claude Code sessions, no separate API key needed)
+  // -------------------------------------------------------------------------
+
+  // GET /planner/status - Get planner availability and state
+  if (req.method === 'GET' && req.url === '/planner/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      ok: true,
+      available: plannerAgent.isAvailable(),
+      state: plannerState,
+    }))
+    return
+  }
+
+  // POST /planner/build-prompt - Build a planning prompt to send to Claude Code
+  if (req.method === 'POST' && req.url === '/planner/build-prompt') {
+    collectRequestBody(req).then(body => {
+      try {
+        const request = JSON.parse(body) as PlanRequest
+
+        if (!request.goal?.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Goal is required' }))
+          return
+        }
+
+        // Build the prompt
+        const prompt = plannerAgent.buildPrompt(request)
+
+        // Update state
+        plannerState.status = 'planning'
+        plannerState.currentGoal = request.goal
+
+        log(`Built planning prompt for: ${request.goal.slice(0, 50)}...`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, prompt }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // POST /planner/parse - Parse Claude's response into a plan
+  if (req.method === 'POST' && req.url === '/planner/parse') {
+    collectRequestBody(req).then(body => {
+      try {
+        const { response } = JSON.parse(body) as { response: string }
+
+        if (!response?.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Response is required' }))
+          return
+        }
+
+        try {
+          const plan = plannerAgent.parseResponse(response)
+          plannerState.status = 'idle'
+
+          log(`Parsed plan with ${plan.todos.length} tasks`)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, plan }))
+        } catch (parseError) {
+          plannerState.status = 'idle'
+          plannerState.currentGoal = null
+
+          const msg = parseError instanceof Error ? parseError.message : String(parseError)
+          log(`Plan parsing failed: ${msg}`)
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: `Failed to parse plan: ${msg}` }))
+        }
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // POST /planner/create-todos - Create todos from a plan
+  if (req.method === 'POST' && req.url === '/planner/create-todos') {
+    collectRequestBody(req).then(async body => {
+      try {
+        const { sessionId, todos, autoExecute } = JSON.parse(body) as {
+          sessionId: string
+          todos: Array<{ text: string; description?: string; dependencies?: number[] }>
+          autoExecute?: boolean
+        }
+
+        // Find session
+        const session = managedSessions.get(sessionId)
+        if (!session) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Session not found' }))
+          return
+        }
+
+        // Create todos
+        const createdTodos: Todo[] = []
+        for (const todo of todos) {
+          const newTodo: Todo = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            text: todo.text,
+            completed: false,
+            status: 'todo',
+            createdAt: Date.now(),
+          }
+          createdTodos.push(newTodo)
+        }
+
+        // Find or create session todos
+        let sessionTodos = allTodos.find(st => st.sessionId === sessionId)
+        if (!sessionTodos) {
+          sessionTodos = {
+            sessionId,
+            sessionName: session.name,
+            todos: [],
+          }
+          allTodos.push(sessionTodos)
+        }
+
+        // Add todos
+        sessionTodos.todos.push(...createdTodos)
+        saveTodos()
+
+        log(`Created ${createdTodos.length} todos from plan for session ${session.name}`)
+
+        // Update planner state
+        plannerState.totalCount = createdTodos.length
+        plannerState.completedCount = 0
+
+        // TODO: Implement auto-execute if requested
+        if (autoExecute) {
+          plannerState.status = 'executing'
+          // Auto-execution will be implemented in a follow-up
+          // For now, just set the state
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          ok: true,
+          todos: createdTodos,
+          count: createdTodos.length,
+        }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Invalid request' }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // POST /planner/pause - Pause auto-execution
+  if (req.method === 'POST' && req.url === '/planner/pause') {
+    if (plannerState.status === 'executing') {
+      plannerState.status = 'paused'
+      log('Planner auto-execution paused')
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, state: plannerState }))
+    return
+  }
+
+  // POST /planner/resume - Resume auto-execution
+  if (req.method === 'POST' && req.url === '/planner/resume') {
+    if (plannerState.status === 'paused') {
+      plannerState.status = 'executing'
+      log('Planner auto-execution resumed')
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, state: plannerState }))
+    return
+  }
+
+  // POST /planner/reset - Reset planner state
+  if (req.method === 'POST' && req.url === '/planner/reset') {
+    plannerState = {
+      status: 'idle',
+      currentGoal: null,
+      executingTodoId: null,
+      completedCount: 0,
+      totalCount: 0,
+    }
+    log('Planner state reset')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, state: plannerState }))
     return
   }
 

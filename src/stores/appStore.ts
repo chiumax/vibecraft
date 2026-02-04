@@ -57,6 +57,7 @@ export type ModalType =
   | 'zoneCommand'
   | 'textLabel'
   | 'zoneTimeout'
+  | 'runTodo'
   | null
 
 // ============================================================================

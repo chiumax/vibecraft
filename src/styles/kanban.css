@@ -237,11 +237,65 @@
   line-height: 1.4;
 }
 
+.kanban-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .kanban-card-session {
-  display: block;
   font-size: 10px;
   color: rgba(255, 255, 255, 0.4);
-  margin-top: 4px;
+}
+
+.kanban-card-executing {
+  font-size: 10px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.kanban-card.executing {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Card actions container */
+.kanban-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Run button */
+.kanban-card-run {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: rgba(74, 222, 128, 0.5);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.kanban-card:hover .kanban-card-run {
+  opacity: 1;
+}
+
+.kanban-card-run:hover {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
 }
 
 .kanban-card-delete {

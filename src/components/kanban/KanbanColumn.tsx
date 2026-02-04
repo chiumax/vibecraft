@@ -32,6 +32,7 @@ interface KanbanColumnProps {
   todos: TodoWithMeta[]
   getSessionColor: (sessionId: string) => string
   onDeleteTodo: (sessionId: string, todoId: string) => void
+  onRunTodo?: (sessionId: string, todo: Todo, sessionName: string) => void
 }
 
 export function KanbanColumn({
@@ -39,6 +40,7 @@ export function KanbanColumn({
   todos,
   getSessionColor,
   onDeleteTodo,
+  onRunTodo,
 }: KanbanColumnProps) {
   const config = COLUMN_CONFIGS.find(c => c.id === status)!
 
@@ -66,6 +68,7 @@ export function KanbanColumn({
             sessionName={sessionName}
             sessionColor={getSessionColor(sessionId)}
             onDelete={onDeleteTodo}
+            onRun={onRunTodo}
           />
         ))}
         {todos.length === 0 && (

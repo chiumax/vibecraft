@@ -12,7 +12,7 @@
  * Phase 4+: Layout, scene, etc.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useAppStore } from './stores'
 import {
   AboutModal,
@@ -24,6 +24,7 @@ import {
   ZoneTimeoutModal,
   NewSessionModal,
   ZoneCommandModal,
+  RunTodoModal,
 } from './components/modals'
 import { SessionsPanelPortal } from './components/sessions'
 import { FeedPanelPortal } from './components/feed'
@@ -69,6 +70,21 @@ export function App({ agentPort = 4003, onRefreshSessions, sessionCallbacks }: A
     }
   }, [activeModal])
 
+  // Callback to send prompt to a Claude Code session
+  const handleSendPrompt = useCallback(async (sessionId: string, prompt: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      return await response.json()
+    } catch (e) {
+      console.error('Error sending prompt:', e)
+      return { ok: false, error: 'Network error' }
+    }
+  }, [])
+
   // Render modal components and sessions panel
   return (
     <AppLayout>
@@ -82,6 +98,7 @@ export function App({ agentPort = 4003, onRefreshSessions, sessionCallbacks }: A
       <ZoneTimeoutModal />
       <NewSessionModal />
       <ZoneCommandModal />
+      <RunTodoModal />
 
       {/* Sessions Panel (rendered via portal into #managed-sessions) */}
       {sessionCallbacks && (
@@ -100,7 +117,7 @@ export function App({ agentPort = 4003, onRefreshSessions, sessionCallbacks }: A
       <FeedPanelPortal cwd={serverCwd} />
 
       {/* Kanban Board (rendered via portal into #todos-board-view) */}
-      <KanbanBoardPortal apiUrl="/api" />
+      <KanbanBoardPortal apiUrl="/api" onSendPrompt={handleSendPrompt} />
 
       {/* Toast notifications */}
       <ToastContainer />

@@ -324,6 +324,8 @@ export interface ManagedSession {
     q: number
     r: number
   }
+  /** Context files read by Claude (Phase 1: Context Visibility) */
+  context?: SessionContext
   // Note: usePty field removed - PTY is now the only mode
 }
 
@@ -605,6 +607,20 @@ export interface Todo {
   completed: boolean  // Keep for backwards compatibility
   status: TodoStatus  // Kanban column status
   createdAt: number
+  /** Session ID running this todo (Phase 2: Todo-to-Agent) */
+  executingSessionId?: string
+  /** When execution was started */
+  executionStartedAt?: number
+  /** Additional context prepended to the todo when executed */
+  contextPrefix?: string
+}
+
+/** Request to execute a todo as a prompt */
+export interface ExecuteTodoRequest {
+  /** Target session ID (null = create new session) */
+  sessionId: string | null
+  /** Additional context to prepend */
+  contextPrefix?: string
 }
 
 /** Todos grouped by session */
@@ -612,4 +628,94 @@ export interface SessionTodos {
   sessionId: string
   sessionName: string
   todos: Todo[]
+}
+
+// ============================================================================
+// Context Tracking (Phase 1: Context Visibility)
+// ============================================================================
+
+/** Category of a context file */
+export type ContextFileCategory =
+  | 'project'   // Main CLAUDE.md in project root
+  | 'parent'    // CLAUDE.md in parent directory
+  | 'local'     // CLAUDE.md in subdirectory
+  | 'rules'     // Files in .claude/ directory
+  | 'docs'      // Documentation files
+
+/** A tracked context file read by Claude */
+export interface ContextFileRead {
+  /** Absolute file path */
+  path: string
+  /** Category of the context file */
+  category: ContextFileCategory
+  /** When first read (unix ms) */
+  firstReadAt: number
+  /** Number of times read */
+  readCount: number
+}
+
+/** Context state for a session */
+export interface SessionContext {
+  /** Context files read by Claude */
+  contextFiles: ContextFileRead[]
+  /** Whether the main project CLAUDE.md has been confirmed read */
+  projectContextLoaded: boolean
+  /** Working directory of the session */
+  cwd: string
+}
+
+// ============================================================================
+// Planner Agent (Phase 3)
+// ============================================================================
+
+/** Request to create a plan from a goal */
+export interface PlanRequest {
+  /** The high-level goal to break down */
+  goal: string
+  /** Associate todos with this session */
+  sessionId?: string
+  /** Project context (CLAUDE.md content) to inform the plan */
+  projectContext?: string
+  /** Automatically execute todos after creation */
+  autoExecute?: boolean
+}
+
+/** A single task in the AI-generated plan */
+export interface PlanTask {
+  /** Task text */
+  text: string
+  /** Optional description */
+  description?: string
+  /** Indices of tasks this depends on (0-indexed) */
+  dependencies?: number[]
+}
+
+/** Result of planning a goal */
+export interface PlanResult {
+  /** Summary of the plan */
+  summary: string
+  /** Tasks to accomplish the goal */
+  todos: PlanTask[]
+}
+
+/** Status of the planner */
+export type PlannerStatus =
+  | 'idle'       // No active plan
+  | 'planning'   // AI is generating a plan
+  | 'executing'  // Auto-executing todos
+  | 'paused'     // Execution paused
+  | 'complete'   // All todos complete
+
+/** Current planner state */
+export interface PlannerState {
+  /** Current status */
+  status: PlannerStatus
+  /** The goal being worked on */
+  currentGoal: string | null
+  /** Todo currently being executed */
+  executingTodoId: string | null
+  /** Number of todos completed */
+  completedCount: number
+  /** Total number of todos in the plan */
+  totalCount: number
 }

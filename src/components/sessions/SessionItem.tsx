@@ -6,6 +6,7 @@
  */
 
 import type { ManagedSession } from '@shared/types'
+import { ContextIndicatorCompact } from './ContextIndicator'
 
 interface SessionItemProps {
   session: ManagedSession
@@ -82,6 +83,7 @@ export function SessionItem({
       <div className="session-info">
         <div className="session-name-row">
           <span className="session-name">{session.name}</span>
+          <ContextIndicatorCompact context={session.context} />
           {keybind && <span className="session-keybind">{keybind}</span>}
         </div>
         <div className="session-meta">

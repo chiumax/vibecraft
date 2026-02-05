@@ -1,8 +1,5 @@
 /**
- * SettingsModal - Application settings (shadcn/ui version)
- *
- * Handles volume, spatial audio, streaming mode, grid size, port configuration,
- * and other application settings.
+ * SettingsModal - Application settings
  */
 
 import { useEffect, useState } from 'react'
@@ -28,10 +25,55 @@ import {
   SelectValue,
 } from '../ui/select'
 import { KeybindSettings } from '../ui/keybind-settings'
+import { Volume2, Eye, Grid3X3, Wifi, Layout, RefreshCw, Keyboard } from 'lucide-react'
 
 interface SettingsModalProps {
   onRefreshSessions?: () => Promise<void>
   agentPort: number
+}
+
+function SettingsSection({
+  icon: Icon,
+  title,
+  children
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Icon className="h-4 w-4 text-primary" />
+        {title}
+      </div>
+      <div className="space-y-4 pl-6">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function SettingRow({
+  label,
+  description,
+  children
+}: {
+  label: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="space-y-0.5">
+        <Label className="text-sm">{label}</Label>
+        {description && (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        )}
+      </div>
+      {children}
+    </div>
+  )
 }
 
 export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalProps) {
@@ -39,7 +81,6 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
   const hideModal = useAppStore((s) => s.hideModal)
   const connected = useAppStore((s) => s.connected)
 
-  // Persisted settings from store
   const volume = useAppStore((s) => s.volume)
   const setVolume = useAppStore((s) => s.setVolume)
   const spatialAudioEnabled = useAppStore((s) => s.spatialAudioEnabled)
@@ -55,19 +96,13 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
   const stackShellWithSessions = useAppStore((s) => s.stackShellWithSessions)
   const setStackShellWithSessions = useAppStore((s) => s.setStackShellWithSessions)
 
-  // Local state for port input (to avoid immediate changes)
   const [localPort, setLocalPort] = useState(port)
-
   const isOpen = activeModal === 'settings'
 
-  // Sync local port state when modal opens
   useEffect(() => {
-    if (isOpen) {
-      setLocalPort(agentPort)
-    }
+    if (isOpen) setLocalPort(agentPort)
   }, [isOpen, agentPort])
 
-  // Apply settings to sound manager when they change
   useEffect(() => {
     soundManager.setVolume(volume / 100)
   }, [volume])
@@ -76,13 +111,11 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
     soundManager.setSpatialEnabled(spatialAudioEnabled)
   }, [spatialAudioEnabled])
 
-  // Apply sound pack changes
   useEffect(() => {
     soundManager.setSoundPack(soundPack as SoundPackId)
     soundManager.preloadPack()
   }, [soundPack])
 
-  // Apply streaming mode
   useEffect(() => {
     const usernameEl = document.getElementById('username')
     if (usernameEl) {
@@ -95,42 +128,26 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
     }
   }, [streamingMode])
 
-  // Apply stack shell mode
   useEffect(() => {
     const sessionsPanel = document.getElementById('sessions-panel')
     if (sessionsPanel) {
-      if (stackShellWithSessions) {
-        sessionsPanel.classList.add('stacked-shell')
-      } else {
-        sessionsPanel.classList.remove('stacked-shell')
-      }
+      sessionsPanel.classList.toggle('stacked-shell', stackShellWithSessions)
     }
   }, [stackShellWithSessions])
 
   const handleVolumeChange = (value: number[]) => {
     const vol = value[0]
     setVolume(vol)
-    // Play tick with pitch based on slider position
     const state = getAppState()
-    if (state.soundEnabled) {
-      soundManager.playSliderTick(vol / 100)
-    }
+    if (state.soundEnabled) soundManager.playSliderTick(vol / 100)
   }
 
   const handleGridSizeChange = (value: number[]) => {
     const size = value[0]
     setGridSize(size)
-    // Update scene grid
     const state = getAppState()
     state.scene?.setGridRange(size)
-    if (state.soundEnabled) {
-      soundManager.playSliderTick((size - 5) / 75)
-    }
-  }
-
-  const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newPort = parseInt(e.target.value, 10)
-    setLocalPort(newPort)
+    if (state.soundEnabled) soundManager.playSliderTick((size - 5) / 75)
   }
 
   const handlePortBlur = () => {
@@ -142,25 +159,19 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
     }
   }
 
-  const handleRefreshSessions = async () => {
-    await onRefreshSessions?.()
-    hideModal()
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && hideModal()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[520px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 py-2">
           {/* Audio */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">Audio</Label>
-            <div className="space-y-3 pl-1">
+          <SettingsSection icon={Volume2} title="Audio">
+            <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <span className="text-sm w-16">Volume</span>
+                <Label className="w-20 text-sm">Volume</Label>
                 <Slider
                   value={[volume]}
                   onValueChange={handleVolumeChange}
@@ -169,27 +180,17 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
                   step={1}
                   className="flex-1"
                 />
-                <span className="text-sm text-muted-foreground w-12 text-right">{volume}%</span>
+                <span className="w-12 text-right text-sm tabular-nums">{volume}%</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="spatial-audio"
-                    checked={spatialAudioEnabled}
-                    onCheckedChange={setSpatialAudioEnabled}
-                  />
-                  <Label htmlFor="spatial-audio" className="text-sm font-normal cursor-pointer">
-                    Spatial Audio
-                  </Label>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  Volume/pan based on zone position
-                </span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm w-20">Sound Pack</span>
+
+              <SettingRow label="Spatial Audio" description="Volume and pan based on zone position">
+                <Switch checked={spatialAudioEnabled} onCheckedChange={setSpatialAudioEnabled} />
+              </SettingRow>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Sound Pack</Label>
                 <Select value={soundPack} onValueChange={setSoundPack}>
-                  <SelectTrigger className="flex-1">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -200,39 +201,29 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  {getSoundPackList().find((p) => p.id === soundPack)?.description}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {getSoundPackList().find((p) => p.id === soundPack)?.description || ''}
-              </p>
             </div>
-          </div>
+          </SettingsSection>
+
+          <div className="border-t border-border" />
 
           {/* Privacy */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">Privacy</Label>
-            <div className="flex items-center justify-between pl-1">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="streaming-mode"
-                  checked={streamingMode}
-                  onCheckedChange={setStreamingMode}
-                />
-                <Label htmlFor="streaming-mode" className="text-sm font-normal cursor-pointer">
-                  Streaming Mode
-                </Label>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                Hide username for privacy
-              </span>
-            </div>
-          </div>
+          <SettingsSection icon={Eye} title="Privacy">
+            <SettingRow label="Streaming Mode" description="Hide username for privacy">
+              <Switch checked={streamingMode} onCheckedChange={setStreamingMode} />
+            </SettingRow>
+          </SettingsSection>
+
+          <div className="border-t border-border" />
 
           {/* World */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">World</Label>
-            <div className="space-y-2 pl-1">
+          <SettingsSection icon={Grid3X3} title="World">
+            <div className="space-y-2">
               <div className="flex items-center gap-4">
-                <span className="text-sm w-16">Grid Size</span>
+                <Label className="w-20 text-sm">Grid Size</Label>
                 <Slider
                   value={[gridSize]}
                   onValueChange={handleGridSizeChange}
@@ -241,87 +232,75 @@ export function SettingsModal({ onRefreshSessions, agentPort }: SettingsModalPro
                   step={1}
                   className="flex-1"
                 />
-                <span className="text-sm text-muted-foreground w-12 text-right">{gridSize}</span>
+                <span className="w-12 text-right text-sm tabular-nums">{gridSize}</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Number of hex rings from center. Larger = more space, may impact performance.
+                Number of hex rings from center. Larger values may impact performance.
               </p>
             </div>
-          </div>
+          </SettingsSection>
 
-          {/* Agent Connection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">Agent Connection</Label>
-            <div className="flex items-center gap-2 pl-1">
-              <span className="text-sm">localhost:</span>
-              <Input
-                type="number"
-                value={localPort}
-                min={1}
-                max={65535}
-                onChange={handlePortChange}
-                onBlur={handlePortBlur}
-                className="w-24"
-              />
-              <span className={`text-sm ${connected ? 'text-green-500' : 'text-red-400'}`}>
-                {connected ? '● Connected' : '○ Disconnected'}
-              </span>
+          <div className="border-t border-border" />
+
+          {/* Connection */}
+          <SettingsSection icon={Wifi} title="Connection">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <Label className="text-sm">Port</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">localhost:</span>
+                  <Input
+                    type="number"
+                    value={localPort}
+                    min={1}
+                    max={65535}
+                    onChange={(e) => setLocalPort(parseInt(e.target.value, 10))}
+                    onBlur={handlePortBlur}
+                    className="w-24"
+                  />
+                </div>
+                <span className={connected ? 'text-green-500 text-sm' : 'text-red-400 text-sm'}>
+                  {connected ? '● Connected' : '○ Disconnected'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Port where the Vibecraft agent is running.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground pl-1">
-              Port where the Vibecraft agent is running. Changes require refresh.
-            </p>
-          </div>
+          </SettingsSection>
+
+          <div className="border-t border-border" />
 
           {/* Layout */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">Layout</Label>
-            <div className="flex items-center justify-between pl-1">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="stack-shell"
-                  checked={stackShellWithSessions}
-                  onCheckedChange={setStackShellWithSessions}
-                />
-                <Label htmlFor="stack-shell" className="text-sm font-normal cursor-pointer">
-                  Stack Shell with Sessions
-                </Label>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                Show both panels instead of switching
-              </span>
-            </div>
-          </div>
+          <SettingsSection icon={Layout} title="Layout">
+            <SettingRow label="Stack Shell with Sessions" description="Show both panels instead of switching">
+              <Switch checked={stackShellWithSessions} onCheckedChange={setStackShellWithSessions} />
+            </SettingRow>
+          </SettingsSection>
+
+          <div className="border-t border-border" />
 
           {/* Sessions */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">Sessions</Label>
-            <div className="pl-1">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleRefreshSessions}
-              >
-                🔄 Refresh Sessions
-              </Button>
-            </div>
-          </div>
+          <SettingsSection icon={RefreshCw} title="Sessions">
+            <Button variant="secondary" onClick={() => onRefreshSessions?.().then(hideModal)}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh Sessions
+            </Button>
+          </SettingsSection>
 
-          {/* Keyboard Shortcuts */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-muted-foreground">Keyboard Shortcuts</Label>
-            <div className="pl-1">
-              <KeybindSettings />
-            </div>
-            <p className="text-xs text-muted-foreground pl-1">
+          <div className="border-t border-border" />
+
+          {/* Keyboard */}
+          <SettingsSection icon={Keyboard} title="Keyboard Shortcuts">
+            <KeybindSettings />
+            <p className="text-xs text-muted-foreground">
               Click a keybind to change it. Press the new key combination, or Escape to cancel.
             </p>
-          </div>
+          </SettingsSection>
         </div>
 
-        <div className="flex justify-end mt-4">
-          <Button variant="outline" onClick={hideModal}>
-            Close
-          </Button>
+        <div className="flex justify-end pt-4 border-t border-border">
+          <Button onClick={hideModal}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -1,12 +1,5 @@
 /**
  * PlannerPanel - AI-powered goal decomposition UI
- *
- * Uses Claude Code sessions for planning - no separate API key needed.
- * Flow:
- * 1. User enters a goal
- * 2. We build a planning prompt and send it to a Claude Code session
- * 3. When Claude responds (stop event), we parse the response
- * 4. User reviews the plan and creates todos
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -15,9 +8,6 @@ import { useTodosStore } from '../../stores/todosStore'
 import { useAppStore } from '../../stores'
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
-import { Label } from '../ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
-import { Badge } from '../ui/badge'
 import {
   Select,
   SelectContent,
@@ -30,15 +20,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '../ui/collapsible'
-import { ScrollArea } from '../ui/scroll-area'
-import { ChevronDown, Loader2, Sparkles } from 'lucide-react'
+import { ChevronDown, Loader2, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { StopEvent } from '@shared/types'
 
 interface PlannerPanelProps {
-  /** API URL for requests */
   apiUrl?: string
-  /** Callback to send prompt to a session */
   onSendPrompt?: (sessionId: string, prompt: string) => Promise<{ ok: boolean; error?: string }>
 }
 
@@ -65,7 +52,6 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
     clearError,
   } = usePlannerStore()
 
-  // Form state
   const [goal, setGoal] = useState('')
   const [targetSessionId, setTargetSessionId] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
@@ -74,13 +60,11 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
   const [showManualInput, setShowManualInput] = useState(false)
   const lastEventIdRef = useRef<string | null>(null)
 
-  // Initialize
   useEffect(() => {
     setApiUrl(apiUrl)
     fetchStatus()
   }, [apiUrl, setApiUrl, fetchStatus])
 
-  // Set default session
   useEffect(() => {
     if (managedSessions.length > 0 && !targetSessionId) {
       const activeSession = managedSessions.find((s) => s.status !== 'offline')
@@ -92,11 +76,8 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
     }
   }, [managedSessions, targetSessionId])
 
-  // Watch for stop events when waiting for response
   useEffect(() => {
     if (!waitingForResponse || !targetSessionId) return
-
-    // Find the most recent stop event for our session
     const session = managedSessions.find(s => s.id === targetSessionId)
     if (!session?.claudeSessionId) return
 
@@ -112,26 +93,20 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
       if (latestStop.response) {
         lastEventIdRef.current = latestStop.id
         setWaitingForResponse(false)
-        // Auto-parse the response
         parseResponse(latestStop.response)
       }
     }
   }, [eventHistory, waitingForResponse, targetSessionId, managedSessions, parseResponse])
 
-  // Build and send prompt to session
   const handlePlan = useCallback(async () => {
     if (!goal.trim() || !targetSessionId || !onSendPrompt) return
-
-    // Build the prompt
     const prompt = await buildPrompt({ goal: goal.trim() })
     if (!prompt) return
 
-    // Remember the last event ID to detect new stop events
     if (eventHistory.length > 0) {
       lastEventIdRef.current = eventHistory[eventHistory.length - 1].id
     }
 
-    // Send to Claude Code session
     const result = await onSendPrompt(targetSessionId, prompt)
     if (result.ok) {
       setWaitingForResponse(true)
@@ -141,7 +116,6 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
     }
   }, [goal, targetSessionId, onSendPrompt, buildPrompt, eventHistory, clearError])
 
-  // Manual parse (if auto-parse doesn't work)
   const handleManualParse = useCallback(async () => {
     if (!manualResponse.trim()) return
     await parseResponse(manualResponse.trim())
@@ -150,10 +124,8 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
     setShowManualInput(false)
   }, [manualResponse, parseResponse])
 
-  // Create todos from plan
   const handleCreateTodos = useCallback(async () => {
     if (!targetSessionId) return
-
     const success = await createTodos(targetSessionId, false)
     if (success) {
       loadTodos()
@@ -162,7 +134,6 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
     }
   }, [targetSessionId, createTodos, loadTodos])
 
-  // Cancel/reset
   const handleCancel = useCallback(() => {
     clearPreview()
     clearError()
@@ -172,69 +143,65 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
     reset()
   }, [clearPreview, clearError, reset])
 
-  // Get active sessions
   const activeSessions = managedSessions.filter((s) => s.status !== 'offline')
   const isProcessing = isBuildingPrompt || isParsingResponse || waitingForResponse
 
   return (
-    <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      className="border-b border-border bg-card/50"
-    >
-      <CollapsibleTrigger asChild>
-        <button className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent/50 transition-colors">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <span className="font-medium">AI Planner</span>
-            {(waitingForResponse || planPreview) && (
-              <Badge variant={waitingForResponse ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                {waitingForResponse ? 'working' : 'ready'}
-              </Badge>
-            )}
-          </div>
-          <ChevronDown className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform",
-            isOpen && "rotate-180"
-          )} />
-        </button>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 bg-secondary/30 hover:bg-secondary/50 border-b border-border transition-colors">
+        <div className="flex items-center gap-3">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="font-medium text-sm">AI Planner</span>
+          {waitingForResponse && (
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Working...
+            </span>
+          )}
+          {planPreview && !waitingForResponse && (
+            <span className="flex items-center gap-1 text-xs text-green-500">
+              <CheckCircle2 className="h-3 w-3" />
+              Ready
+            </span>
+          )}
+        </div>
+        <ChevronDown className={cn(
+          "h-4 w-4 text-muted-foreground transition-transform duration-200",
+          isOpen && "rotate-180"
+        )} />
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="px-3 pb-3">
-        <div className="space-y-3 pt-2">
-          {/* Goal input (when no prompt/preview) */}
+      <CollapsibleContent>
+        <div className="p-4 space-y-4 bg-secondary/20 border-b border-border">
+
+          {/* Input Form */}
           {!generatedPrompt && !planPreview && !waitingForResponse && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="goal" className="text-xs">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
                   What do you want to accomplish?
-                </Label>
+                </label>
                 <Textarea
-                  id="goal"
                   value={goal}
                   onChange={(e) => setGoal(e.target.value)}
                   placeholder="e.g., Add user authentication with JWT tokens"
-                  rows={2}
-                  className="resize-none text-sm"
+                  rows={3}
                   disabled={isProcessing}
+                  className="bg-background"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="session" className="text-xs">
-                  Claude Code Session
-                </Label>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Target Session
+                </label>
                 {activeSessions.length === 0 ? (
-                  <p className="text-xs text-destructive py-1">
-                    No active sessions. Start a session first.
+                  <p className="text-sm text-destructive">
+                    No active sessions available.
                   </p>
                 ) : (
-                  <Select
-                    value={targetSessionId}
-                    onValueChange={setTargetSessionId}
-                    disabled={isProcessing}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
+                  <Select value={targetSessionId} onValueChange={setTargetSessionId} disabled={isProcessing}>
+                    <SelectTrigger className="bg-background">
                       <SelectValue placeholder="Select a session" />
                     </SelectTrigger>
                     <SelectContent>
@@ -249,25 +216,25 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
               </div>
 
               {error && (
-                <div className="p-2 bg-destructive/10 border border-destructive/20 rounded-md text-xs text-destructive">
-                  {error}
+                <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                  <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 
               <Button
                 onClick={handlePlan}
                 disabled={!goal.trim() || isProcessing || activeSessions.length === 0 || !onSendPrompt}
-                size="sm"
                 className="w-full"
               >
                 {isBuildingPrompt ? (
                   <>
-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                    Building...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Building prompt...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 h-3 w-3" />
+                    <Sparkles className="mr-2 h-4 w-4" />
                     Generate Plan
                   </>
                 )}
@@ -275,36 +242,32 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
             </div>
           )}
 
-          {/* Waiting for Claude's response */}
+          {/* Waiting State */}
           {waitingForResponse && (
-            <div className="space-y-3">
-              <Card className="bg-muted/30">
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span>Waiting for Claude to generate a plan...</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    This will update automatically when Claude responds.
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-4 rounded-md bg-primary/10 border border-primary/20">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <div>
+                  <p className="font-medium">Generating plan...</p>
+                  <p className="text-sm text-muted-foreground">
+                    Claude is breaking down your goal into tasks.
                   </p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              {/* Manual response input (fallback) */}
               <Collapsible open={showManualInput} onOpenChange={setShowManualInput}>
-                <CollapsibleTrigger className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <CollapsibleTrigger className="text-sm text-muted-foreground hover:text-foreground underline">
                   Response not detected? Paste manually
                 </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2 space-y-2">
+                <CollapsibleContent className="pt-3 space-y-3">
                   <Textarea
                     value={manualResponse}
                     onChange={(e) => setManualResponse(e.target.value)}
-                    placeholder="Paste Claude's JSON response here..."
-                    rows={3}
-                    className="resize-none font-mono text-xs"
+                    placeholder="Paste Claude's JSON response..."
+                    rows={4}
+                    className="font-mono text-sm bg-background"
                   />
                   <Button
-                    size="sm"
                     variant="secondary"
                     onClick={handleManualParse}
                     disabled={!manualResponse.trim() || isParsingResponse}
@@ -314,68 +277,58 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
                 </CollapsibleContent>
               </Collapsible>
 
-              <Button variant="outline" size="sm" onClick={handleCancel} className="w-full">
+              <Button variant="outline" onClick={handleCancel} className="w-full">
                 Cancel
               </Button>
             </div>
           )}
 
-          {/* Plan preview */}
+          {/* Plan Preview */}
           {planPreview && (
-            <div className="space-y-3">
-              <Card className="bg-muted/30">
-                <CardHeader className="p-3 pb-2">
-                  <CardTitle className="text-sm">Plan Preview</CardTitle>
-                </CardHeader>
-                <CardContent className="p-3 pt-0 space-y-2">
-                  {/* Summary */}
-                  <p className="text-xs text-muted-foreground">
-                    {planPreview.summary}
-                  </p>
+            <div className="space-y-4">
+              <div className="rounded-md border border-border bg-background p-4 space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-1">Plan Summary</h3>
+                  <p className="text-sm text-muted-foreground">{planPreview.summary}</p>
+                </div>
 
-                  {/* Tasks */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                      Tasks ({planPreview.todos.length})
-                    </Label>
-                    <ScrollArea className="max-h-32">
-                      <div className="space-y-1">
-                        {planPreview.todos.map((task, index) => (
-                          <div
-                            key={index}
-                            className="p-1.5 bg-background/50 rounded text-xs"
-                          >
-                            <div className="flex items-start gap-1.5">
-                              <span className="text-muted-foreground font-mono text-[10px] mt-0.5">
-                                {index + 1}.
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium leading-tight">{task.text}</p>
-                                {task.description && (
-                                  <p className="text-muted-foreground text-[10px] mt-0.5 line-clamp-2">
-                                    {task.description}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                <div>
+                  <h4 className="text-sm font-medium mb-2">
+                    Tasks ({planPreview.todos.length})
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                    {planPreview.todos.map((task, index) => (
+                      <div
+                        key={index}
+                        className="flex gap-3 p-3 rounded-md bg-secondary/50 border border-border"
+                      >
+                        <span className="text-sm font-mono text-muted-foreground shrink-0 w-6">
+                          {index + 1}.
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{task.text}</p>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {task.description}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </ScrollArea>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {error && (
-                <div className="p-2 bg-destructive/10 border border-destructive/20 rounded-md text-xs text-destructive">
-                  {error}
+                <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                  <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={handleCancel}
                   disabled={isCreatingTodos}
                   className="flex-1"
@@ -383,18 +336,20 @@ export function PlannerPanel({ apiUrl = '/api', onSendPrompt }: PlannerPanelProp
                   Cancel
                 </Button>
                 <Button
-                  size="sm"
                   onClick={handleCreateTodos}
                   disabled={isCreatingTodos}
                   className="flex-1"
                 >
                   {isCreatingTodos ? (
                     <>
-                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Creating...
                     </>
                   ) : (
-                    'Create Todos'
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Create Todos
+                    </>
                   )}
                 </Button>
               </div>
